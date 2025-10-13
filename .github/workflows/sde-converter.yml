@@ -1,6 +1,8 @@
 name: EVE SDE Converter
 
 on:
+  push:
+    branches: [ master ]
   schedule:
     - cron: '0 0 */2 * *'  # Every 2 days at midnight UTC
   workflow_dispatch:  # Allow manual trigger
