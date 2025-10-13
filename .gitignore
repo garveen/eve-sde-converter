@@ -1,0 +1,25 @@
+# Node.js
+node_modules/
+dist/
+
+# Output files
+output/
+
+refs/
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Others
+.env

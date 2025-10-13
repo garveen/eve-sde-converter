@@ -1,0 +1,89 @@
+name: EVE SDE Converter
+
+on:
+  schedule:
+    - cron: '0 0 */2 * *'  # Every 2 days at midnight UTC
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'pnpm'
+
+    - name: Install tsx
+      run: pnpm add -g tsx
+
+    - name: Check if release exists
+      id: check_release
+      run: |
+        BUILD_NUMBER=$(tsx src/index.ts check-update 2>&1 | grep "Latest build number:" | awk '{print $4}')
+        COMMIT_SHA=$(git rev-parse --short HEAD)
+        TAG_NAME="sde-${BUILD_NUMBER}-${COMMIT_SHA}"
+        if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+          echo "Release $TAG_NAME already exists. Skipping."
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Release $TAG_NAME does not exist. Proceeding."
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run conversion
+      if: steps.check_release.outputs.exists == 'false'
+      run: tsx src/index.ts convert
+
+    - name: Compress MySQL dump
+      if: steps.check_release.outputs.exists == 'false'
+      run: bzip2 output/sde.sql
+
+    - name: Create release
+      if: steps.check_release.outputs.exists == 'false'
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: sde-${{ steps.check_release.outputs.build_number }}-${{ steps.check_release.outputs.commit_sha }}
+        release_name: EVE SDE Build ${{ steps.check_release.outputs.build_number }} (Commit ${{ steps.check_release.outputs.commit_sha }})
+        body: |
+          Automated release for EVE SDE build ${{ steps.check_release.outputs.build_number }}
+
+          Commit: ${{ steps.check_release.outputs.commit_sha }}
+
+          Generated files:
+          - sde.sql.bz2 (Compressed MySQL dump)
+          - sde.sqlite (SQLite database)
+        draft: false
+        prerelease: false
+
+    - name: Upload MySQL dump
+      if: steps.check_release.outputs.exists == 'false'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./output/sde.sql.bz2
+        asset_name: sde.sql.bz2
+        asset_content_type: application/x-bzip2
+
+    - name: Upload SQLite database
+      if: steps.check_release.outputs.exists == 'false'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./output/sde.sqlite
+        asset_name: sde.sqlite
+        asset_content_type: application/octet-stream
