@@ -64,9 +64,12 @@ jobs:
       if: steps.check_release.outputs.exists == 'false'
       run: tsx src/index.ts convert
 
-    - name: Compress MySQL dump
+    - name: Compress files
       if: steps.check_release.outputs.exists == 'false'
-      run: bzip2 output/sde.sql
+      run: |
+        bzip2 output/sde.sql &
+        bzip2 output/sde.sqlite &
+        wait
 
     - name: Create and upload release
       if: steps.check_release.outputs.exists == 'false'
@@ -79,5 +82,5 @@ jobs:
 
         Generated files:
         - sde.sql.bz2 (Compressed MySQL dump)
-        - sde.sqlite (SQLite database)"
-        gh release create "$TAG" --title "$TITLE" --notes "$NOTES" ./output/sde.sql.bz2 ./output/sde.sqlite
+        - sde.sqlite.bz2 (Compressed SQLite database)"
+        gh release create "$TAG" --title "$TITLE" --notes "$NOTES" ./output/sde.sql.bz2 ./output/sde.sqlite.bz2
