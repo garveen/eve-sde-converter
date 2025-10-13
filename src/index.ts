@@ -82,7 +82,11 @@ program.command('convert')
 
       console.log('Conversion completed successfully!');
     } catch (error) {
-      console.error('Error during conversion:', error);
+      if (error instanceof Error) {
+        console.error('Error during conversion:', error, error.stack);
+      } else {
+        console.error('Unknown error during conversion:', error);
+      }
       process.exit(1);
     }
   });

@@ -1,5 +1,6 @@
 ### These tables are not processed which origin fuzzwork dumps have.
 
+- agtResearchAgents
 - charFactions
 - crpNPCCorporationDivisions
 - crpNPCCorporationResearchFields

@@ -1,8 +1,13 @@
-import * as https from 'https';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { ProxyAgent } from 'undici';
 const AdmZip = require('adm-zip');
+
+function getProxyAgent() {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+  return proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+}
 
 export interface BuildInfo {
   _key: string;
@@ -11,45 +16,41 @@ export interface BuildInfo {
 }
 
 export async function getLatestBuildNumber(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const url = 'https://developers.eveonline.com/static-data/tranquility/latest.jsonl';
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        try {
-          const lines = data.trim().split('\n');
-          const json = JSON.parse(lines[0]) as BuildInfo;
-          resolve(json.buildNumber);
-        } catch (err) {
-          reject(err);
-        }
-      });
-    }).on('error', (err) => {
-      reject(err);
+  try {
+    const response = await fetch('https://developers.eveonline.com/static-data/tranquility/latest.jsonl', {
+      method: 'GET',
+      signal: AbortSignal.timeout(10000),
+      dispatcher: getProxyAgent() as any
     });
-  });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const data = await response.text();
+    const lines = data.trim().split('\n');
+    const json = JSON.parse(lines[0]) as BuildInfo;
+    return json.buildNumber;
+  } catch (err) {
+    throw err;
+  }
 }
 
 
 
 export async function downloadZip(buildNumber: number, outputPath: string): Promise<void> {
   const url = `https://developers.eveonline.com/static-data/tranquility/eve-online-static-data-${buildNumber}-jsonl.zip`;
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(outputPath);
-    https.get(url, (res) => {
-      res.pipe(file);
-      file.on('finish', () => {
-        file.close();
-        resolve();
-      });
-    }).on('error', (err) => {
-      fs.unlink(outputPath, () => {});
-      reject(err);
+  try {
+    const response = await fetch(url, {
+      dispatcher: getProxyAgent() as any
     });
-  });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(outputPath, Buffer.from(buffer));
+  } catch (err) {
+    fs.unlink(outputPath, () => {});
+    throw err;
+  }
 }
 
 export function unzipFile(zipPath: string, outputDir: string): void {
@@ -459,8 +460,17 @@ export function convertToSqlite(mysqlDumpPath: string, sqlitePath: string, mysql
 
 export const tableMappings: Record<string, { files: string[]; fields: Array<string | { name: string; transform: (item: any, subItem?: any, fileName?: string) => any }>; expand?: string; filter?: (item: any) => boolean }> = {
   'agtAgents': {
-    files: ['agents.jsonl'],
-    fields: ['agentID', 'divisionID', 'corporationID', 'locationID', 'level', 'agentTypeID', 'isLocator']
+    files: ['npcCharacters.jsonl'],
+    fields: [
+      { name: 'agentID', transform: (item) => item._key },
+      { name: 'divisionID', transform: (item) => item.agent?.divisionID },
+      'corporationID',
+      'locationID',
+      { name: 'level', transform: (item) => item.agent?.level },
+      { name: 'agentTypeID', transform: (item) => item.agent?.agentTypeID },
+      { name: 'isLocator', transform: (item) => item.agent?.isLocator }
+    ],
+    filter: (item) => item.agent != null
   },
   'agtAgentTypes': {
     files: ['agentTypes.jsonl'],
@@ -669,14 +679,6 @@ export const tableMappings: Record<string, { files: string[]; fields: Array<stri
       { name: 'itemName', transform: (item) => item.name?.en || '' },
       { name: 'groupID', transform: (item) => item.groupID }
     ]
-  },
-  'agtResearchAgents': {
-    files: ['researchAgents.jsonl'],
-    fields: [
-      { name: 'agentID', transform: (item) => item._key },
-      { name: 'typeID', transform: (item, subItem) => subItem?.typeID }
-    ],
-    expand: 'skills'
   },
   'certCerts': {
     files: ['certificates.jsonl'],
