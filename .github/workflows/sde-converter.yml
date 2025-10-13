@@ -38,9 +38,6 @@ jobs:
     - name: Install dependencies
       run: pnpm install
 
-    - name: Install system dependencies
-      run: sudo apt-get update && sudo apt-get install -y sqlite3
-
     - name: Install tsx
       run: pnpm add -g tsx
 
@@ -59,6 +56,10 @@ jobs:
           echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
         fi
+
+    - name: Install sqlite3
+      if: steps.check_release.outputs.exists == 'false'
+      run: sudo apt-get update && sudo apt-get install -y sqlite3
 
     - name: Run conversion
       if: steps.check_release.outputs.exists == 'false'
