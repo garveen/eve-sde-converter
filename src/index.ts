@@ -56,7 +56,7 @@ program.command('convert')
       }
 
       // Generate MySQL dump
-      const schemaPath = path.join(__dirname, '..', 'refs', 'mysql', 'sde-20250707-TRANQUILITY', 'schema.sql');
+      const schemaPath = path.join(__dirname, 'schema.sql');
       const mysqlDumpPath = path.join(__dirname, '..', 'output', 'sde.sql');
 
       // Ensure output directory exists
