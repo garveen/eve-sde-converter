@@ -5,11 +5,9 @@ permissions:
   id-token: write
 
 on:
-  push:
-    branches: [ master ]
   schedule:
-    - cron: '0 0 */2 * *'  # Every 2 days at midnight UTC
-  workflow_dispatch:  # Allow manual trigger
+    - cron: '20 11 * * *'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -60,6 +58,61 @@ jobs:
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
         fi
 
+    - name: Fetch changelog
+      if: steps.check_release.outputs.exists == 'false'
+      id: fetch_changelog
+      run: |
+        BUILD_NUMBER="${{ steps.check_release.outputs.build_number }}"
+        CHANGELOG_URL="https://developers.eveonline.com/static-data/tranquility/changes/${BUILD_NUMBER}.jsonl"
+        
+        echo "Fetching changelog from: $CHANGELOG_URL"
+        
+        CHANGELOG=$(curl -s "$CHANGELOG_URL" | while IFS= read -r line; do
+          KEY=$(echo "$line" | jq -r '._key // empty')
+          if [ -n "$KEY" ] && [ "$KEY" != "_meta" ]; then
+            CHANGED=$(echo "$line" | jq -r '.changed // empty')
+            ADDED=$(echo "$line" | jq -r '.added // empty')
+            REMOVED=$(echo "$line" | jq -r '.removed // empty')
+            
+            COUNT=0
+            TYPES=""
+            
+            if [ -n "$CHANGED" ] && [ "$CHANGED" != "null" ]; then
+              CHANGED_COUNT=$(echo "$CHANGED" | jq 'length')
+              COUNT=$((COUNT + CHANGED_COUNT))
+              TYPES="${TYPES}modified"
+            fi
+            
+            if [ -n "$ADDED" ] && [ "$ADDED" != "null" ]; then
+              ADDED_COUNT=$(echo "$ADDED" | jq 'length')
+              COUNT=$((COUNT + ADDED_COUNT))
+              [ -n "$TYPES" ] && TYPES="${TYPES}, "
+              TYPES="${TYPES}added"
+            fi
+            
+            if [ -n "$REMOVED" ] && [ "$REMOVED" != "null" ]; then
+              REMOVED_COUNT=$(echo "$REMOVED" | jq 'length')
+              COUNT=$((COUNT + REMOVED_COUNT))
+              [ -n "$TYPES" ] && TYPES="${TYPES}, "
+              TYPES="${TYPES}removed"
+            fi
+            
+            if [ $COUNT -gt 0 ]; then
+              echo "**${KEY}**"
+              echo "${COUNT} modifications (${TYPES})"
+              echo ""
+            fi
+          fi
+        done)
+        
+        if [ -z "$CHANGELOG" ]; then
+          CHANGELOG="No changelog available for this build."
+        fi
+        
+        # Save to file to avoid issues with special characters
+        echo "$CHANGELOG" > /tmp/changelog.txt
+        echo "changelog_file=/tmp/changelog.txt" >> $GITHUB_OUTPUT
+
     - name: Run conversion
       if: steps.check_release.outputs.exists == 'false'
       run: tsx src/index.ts convert
@@ -76,11 +129,19 @@ jobs:
       run: |
         TAG="sde-${{ steps.check_release.outputs.build_number }}-${{ steps.check_release.outputs.commit_sha }}"
         TITLE="EVE SDE Build ${{ steps.check_release.outputs.build_number }} (Commit ${{ steps.check_release.outputs.commit_sha }})"
+        
+        CHANGELOG=$(cat ${{ steps.fetch_changelog.outputs.changelog_file }})
+        
         NOTES="Automated release for EVE SDE build ${{ steps.check_release.outputs.build_number }}
 
         Commit: ${{ steps.check_release.outputs.commit_sha }}
 
-        Generated files:
+        ## Changes
+
+        ${CHANGELOG}
+
+        ## Generated files
         - sde.sql.bz2 (Compressed MySQL dump)
         - sde.sqlite.bz2 (Compressed SQLite database)"
+        
         gh release create "$TAG" --title "$TITLE" --notes "$NOTES" ./output/sde.sql.bz2 ./output/sde.sqlite.bz2
