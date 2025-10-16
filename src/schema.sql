@@ -853,6 +853,17 @@ UNLOCK TABLES;
 -- Table structure for table `invFlags`
 --
 -- 
+DROP TABLE IF EXISTS `invFlags`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `invFlags` (
+  `flagID` int(11) NOT NULL,
+  `flagName` varchar(200) DEFAULT NULL,
+  `flagText` varchar(100) DEFAULT NULL,
+  `orderID` int(11) DEFAULT NULL,
+  PRIMARY KEY (`flagID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 -- 
 --

@@ -448,6 +448,49 @@ export function generateMySqlDump(schemaPath: string, unzippedDir: string, outpu
     }
   }
 
+  if (!tableName || tableName === 'invFlags') {
+    try {
+      const invFlagsPath = path.resolve(path.dirname(schemaPath), 'invFlags.sql');
+      if (fs.existsSync(invFlagsPath)) {
+        console.log('Adding fixed invFlags.sql content...');
+        const invFlagsContent = fs.readFileSync(invFlagsPath, 'utf-8');
+        let lockTableIndex = -1;
+        let unlockTableIndex = -1;
+        
+        for (let i = 0; i < newLines.length; i++) {
+          if (newLines[i].includes('LOCK TABLES `invFlags`')) {
+            lockTableIndex = i;
+          } else if (lockTableIndex !== -1 && newLines[i].includes('UNLOCK TABLES')) {
+            unlockTableIndex = i;
+            break;
+          }
+        }
+        
+        if (lockTableIndex !== -1 && unlockTableIndex !== -1) {
+          for (let i = lockTableIndex; i < unlockTableIndex; i++) {
+            if (newLines[i].includes('DISABLE KEYS')) {
+              const invFlagsLines = invFlagsContent.split('\n');
+              newLines.splice(i + 1, 0, ...invFlagsLines);
+              break;
+            }
+          }
+        } else {
+          console.warn('Could not find invFlags table position, will add invFlags content at the end of the file');
+          newLines.push('\n-- Fixed invFlags data');
+          newLines.push('LOCK TABLES `invFlags` WRITE;');
+          newLines.push('/*!40000 ALTER TABLE `invFlags` DISABLE KEYS */;');
+          newLines.push(invFlagsContent);
+          newLines.push('/*!40000 ALTER TABLE `invFlags` ENABLE KEYS */;');
+          newLines.push('UNLOCK TABLES;');
+        }
+      } else {
+        console.warn('invFlags.sql file does not exist, skipping fixed invFlags data');
+      }
+    } catch (e: any) {
+      console.warn(`Error adding invFlags.sql content: ${e.message}`);
+    }
+  }
+
   fs.writeFileSync(outputPath, newLines.join('\n'));
 }
 
