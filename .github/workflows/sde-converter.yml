@@ -57,6 +57,16 @@ jobs:
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
         fi
 
+    - name: Get change summary
+      if: steps.check_release.outputs.exists == 'false'
+      id: change_summary
+      run: |
+        SUMMARY=$(tsx src/index.ts get-change-summary ${{ steps.check_release.outputs.build_number }} 2>&1)
+        # Use EOF for multiline output
+        echo "summary<<EOF" >> $GITHUB_OUTPUT
+        echo "$SUMMARY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
     - name: Install sqlite3
       if: steps.check_release.outputs.exists == 'false'
       run: sudo apt-get update && sudo apt-get install -y sqlite3
@@ -74,14 +84,32 @@ jobs:
 
     - name: Create and upload release
       if: steps.check_release.outputs.exists == 'false'
+      env:
+        CHANGE_SUMMARY: ${{ steps.change_summary.outputs.summary }}
       run: |
         TAG="sde-${{ steps.check_release.outputs.build_number }}-${{ steps.check_release.outputs.commit_sha }}"
         TITLE="EVE SDE Build ${{ steps.check_release.outputs.build_number }} (Commit ${{ steps.check_release.outputs.commit_sha }})"
-        NOTES="Automated release for EVE SDE build ${{ steps.check_release.outputs.build_number }}
-
+        
+        # Create notes using a temp file to avoid shell interpretation
+        NOTES_FILE=$(mktemp)
+        cat > "$NOTES_FILE" << 'RELEASE_NOTES'
+        Automated release for EVE SDE build ${{ steps.check_release.outputs.build_number }}
+        
         Commit: ${{ steps.check_release.outputs.commit_sha }}
-
-        Generated files:
+        
+        ## Changes Summary
+        
+        RELEASE_NOTES
+        
+        echo "$CHANGE_SUMMARY" >> "$NOTES_FILE"
+        
+        cat >> "$NOTES_FILE" << 'RELEASE_NOTES'
+        
+        ## Generated Files
+        
         - sde.sql.bz2 (Compressed MySQL dump)
-        - sde.sqlite.bz2 (Compressed SQLite database)"
-        gh release create "$TAG" --title "$TITLE" --notes "$NOTES" ./output/sde.sql.bz2 ./output/sde.sqlite.bz2
+        - sde.sqlite.bz2 (Compressed SQLite database)
+        RELEASE_NOTES
+        
+        gh release create "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE" ./output/sde.sql.bz2 ./output/sde.sqlite.bz2
+        rm "$NOTES_FILE"

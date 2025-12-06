@@ -34,6 +34,55 @@ export async function getLatestBuildNumber(): Promise<number> {
   }
 }
 
+export async function getChangeSummary(buildNumber: number): Promise<string> {
+  try {
+    const response = await fetch(`https://developers.eveonline.com/static-data/tranquility/changes/${buildNumber}.jsonl`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(10000),
+      dispatcher: getProxyAgent() as any
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const data = await response.text();
+    const lines = data.trim().split('\n');
+    
+    const changes: Record<string, number> = {};
+    let releaseDate = '';
+    
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const json = JSON.parse(line);
+      
+      if (json._key === '_meta') {
+        releaseDate = json.releaseDate;
+      } else if (json.changed && Array.isArray(json.changed)) {
+        changes[json._key] = json.changed.length;
+      }
+    }
+    
+    let summary = `**Updated at:** ${releaseDate}\n\n**Changed tables:**\n`;
+    
+    const sortedChanges = Object.entries(changes)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10); // Top 10 tables
+    
+    for (const [table, count] of sortedChanges) {
+      summary += `- \`${table}\`: ${count} items\n`;
+    }
+    
+    const totalTables = Object.keys(changes).length;
+    if (totalTables > 10) {
+      summary += `- ... and ${totalTables - 10} more tables`;
+    }
+    
+    return summary;
+  } catch (err) {
+    // If we can't get changes, return empty string
+    return '';
+  }
+}
+
 
 
 export async function downloadZip(buildNumber: number, outputPath: string): Promise<void> {
@@ -396,14 +445,33 @@ export function processTable(tableName: string, unzippedDir: string): string[] {
               }
               return value.toString();
             });
+
+            if (tableName === 'invTypeMaterials') {
+              const materialTypeIDIndex = mapping.fields.findIndex(f => 
+                (typeof f === 'string' ? f : f.name) === 'materialTypeID'
+              );
+              if (materialTypeIDIndex !== -1 && values[materialTypeIDIndex] === 'NULL') {
+                continue;
+              }
+            }
+            
             inserts.push(`INSERT INTO \`${tableName}\` (${mapping.fields.map(f => {
               const fieldName = typeof f === 'string' ? f : f.name;
               return `\`${fieldName}\``;
             }).join(', ')}) VALUES (${values.join(', ')});`);
           }
         } else {
-          // Normal processing
           const values = generateInsertValues(item, mapping, fileName);
+
+          if (tableName === 'invTypeMaterials') {
+            const materialTypeIDIndex = mapping.fields.findIndex(f => 
+              (typeof f === 'string' ? f : f.name) === 'materialTypeID'
+            );
+            if (materialTypeIDIndex !== -1 && values[materialTypeIDIndex] === 'NULL') {
+              continue;
+            }
+          }
+          
           inserts.push(`INSERT INTO \`${tableName}\` (${mapping.fields.map(f => {
             const fieldName = typeof f === 'string' ? f : f.name;
             return `\`${fieldName}\``;

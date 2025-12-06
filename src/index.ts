@@ -8,7 +8,8 @@ import {
   downloadZip,
   unzipFile,
   generateMySqlDump,
-  convertToSqlite
+  convertToSqlite,
+  getChangeSummary
 } from './processor';
 
 const program = new Command();
@@ -104,6 +105,19 @@ program.command('check-update')
       process.exit(1); // Exit with 1 to indicate update available
     } catch (error) {
       console.error('Error checking update:', error);
+      process.exit(1);
+    }
+  });
+
+program.command('get-change-summary <buildNumber>')
+  .description('Get change summary for a specific build')
+  .action(async (buildNumber: string) => {
+    try {
+      const buildNum = parseInt(buildNumber, 10);
+      const summary = await getChangeSummary(buildNum);
+      console.log(summary);
+    } catch (error) {
+      console.error('Error getting change summary:', error);
       process.exit(1);
     }
   });
