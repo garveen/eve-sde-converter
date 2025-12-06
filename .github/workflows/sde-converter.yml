@@ -57,6 +57,16 @@ jobs:
           echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
         fi
 
+    - name: Get change summary
+      if: steps.check_release.outputs.exists == 'false'
+      id: change_summary
+      run: |
+        SUMMARY=$(tsx src/index.ts get-change-summary ${{ steps.check_release.outputs.build_number }} 2>&1)
+        # Use EOF for multiline output
+        echo "summary<<EOF" >> $GITHUB_OUTPUT
+        echo "$SUMMARY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
     - name: Install sqlite3
       if: steps.check_release.outputs.exists == 'false'
       run: sudo apt-get update && sudo apt-get install -y sqlite3
@@ -81,7 +91,12 @@ jobs:
 
         Commit: ${{ steps.check_release.outputs.commit_sha }}
 
-        Generated files:
+        ## Changes Summary
+
+        ${{ steps.change_summary.outputs.summary }}
+
+        ## Generated Files
+
         - sde.sql.bz2 (Compressed MySQL dump)
         - sde.sqlite.bz2 (Compressed SQLite database)"
         gh release create "$TAG" --title "$TITLE" --notes "$NOTES" ./output/sde.sql.bz2 ./output/sde.sqlite.bz2
