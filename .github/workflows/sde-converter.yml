@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -113,3 +114,12 @@ jobs:
         
         gh release create "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE" ./output/sde.sql.bz2 ./output/sde.sqlite.bz2
         rm "$NOTES_FILE"
+    - name: Notify Discord
+      if: steps.check_release.outputs.exists == 'false' && env.DISCORD_WEBHOOK != ''
+      env:
+        RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/sde-${{ steps.check_release.outputs.build_number }}-${{ steps.check_release.outputs.commit_sha }}
+      run: |
+        # 构造 Discord embed JSON 并 POST 到 webhook
+        curl -s -H "Content-Type: application/json" \
+          -d '{"content":"${{ env.RELEASE_URL }}"}' \
+          "${{ env.DISCORD_WEBHOOK }}"
