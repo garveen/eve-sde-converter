@@ -2,7 +2,20 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { ProxyAgent } from 'undici';
+import knex from 'knex';
+import {
+  generateMysqlDdl,
+  generatePgsqlDdl,
+  generateSqliteDdl,
+  tableOrder,
+  invFlagsData,
+  mapUniverseData,
+  trnTranslationColumnsData,
+} from './schema';
 const AdmZip = require('adm-zip');
+
+const knexMysql = knex({ client: 'mysql2' });
+const knexPg = knex({ client: 'pg' });
 
 function getProxyAgent() {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
@@ -268,25 +281,24 @@ function extractRawValues(
   );
 }
 
-/** Escape a single value to its SQL literal representation. */
-function serializeSqlValue(value: SqlValue): string {
-  if (value === null || value === undefined) return 'NULL';
-  if (typeof value === 'boolean') return value ? '1' : '0';
-  if (typeof value === 'string') {
-    return `'${value.replace(/'/g, "''").replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}'`;
-  }
-  return value.toString();
+/** Convert InsertRow array to plain key-value objects for knex insert. */
+function insertRowsToObjects(rows: InsertRow[]): Record<string, any>[] {
+  return rows.map(row => {
+    const obj: Record<string, any> = {};
+    for (let i = 0; i < row.columns.length; i++) {
+      const v = row.values[i];
+      obj[row.columns[i]] = v === undefined ? null : v;
+    }
+    return obj;
+  });
 }
 
 /**
  * Serialize structured InsertRow objects into batched multi-row INSERT
- * statements. Rows sharing the same table + column list are merged; each
- * batch is capped by `maxContentLength` (bytes) to stay within MySQL's
- * max_allowed_packet limit.
+ * statements using knex MySQL query builder.
  */
 export function serializeInsertRows(
   rows: InsertRow[],
-  maxContentLength: number = 500 * 1024,
   maxRowsPerBatch: number = 500,
 ): string[] {
   if (rows.length === 0) return [];
@@ -301,32 +313,12 @@ export function serializeInsertRows(
 
   const result: string[] = [];
   for (const group of groups.values()) {
-    const { table, columns } = group[0];
-    const colsPart = columns.map(c => `\`${c}\``).join(', ');
-    const prefix = `INSERT INTO \`${table}\` (${colsPart}) VALUES `;
-    const prefixLen = Buffer.byteLength(prefix, 'utf8') + 1; // +1 for ';'
-
-    let valueParts: string[] = [];
-    let currentLen = prefixLen;
-
-    const flush = () => {
-      if (valueParts.length === 0) return;
-      result.push(`${prefix}${valueParts.join(',\n')};`);
-      valueParts = [];
-      currentLen = prefixLen;
-    };
-
-    for (const row of group) {
-      const valuePart = `(${row.values.map(serializeSqlValue).join(', ')})`;
-      // separator: ',\n' = 2 bytes for all but the first entry
-      const addLen = Buffer.byteLength(valuePart, 'utf8') + 2;
-      if (valueParts.length > 0 && (currentLen + addLen > maxContentLength || valueParts.length >= maxRowsPerBatch)) {
-        flush();
-      }
-      valueParts.push(valuePart);
-      currentLen += addLen;
+    const { table } = group[0];
+    for (let i = 0; i < group.length; i += maxRowsPerBatch) {
+      const batch = group.slice(i, i + maxRowsPerBatch);
+      const sql = knexMysql(table).insert(insertRowsToObjects(batch)).toString();
+      result.push(sql + ';');
     }
-    flush();
   }
   return result;
 }
@@ -789,349 +781,136 @@ export function processTable(tableName: string, unzippedDir: string): InsertRow[
   }
 }
 
-export function generateMySqlDump(schemaPath: string, unzippedDir: string, outputPath: string, tableName?: string): void {
+/** Tables that have static hard-coded data (not sourced from JSONL files). */
+const staticDataTables = new Set(['invFlags', 'mapUniverse', 'trnTranslationColumns']);
+
+/** Generate INSERT SQL for static-data tables using knex MySQL query builder. */
+function getStaticInserts(k: typeof knexMysql | typeof knexPg): string[] {
+  return [
+    k('invFlags').insert(invFlagsData).toString() + ';',
+    k('mapUniverse').insert(mapUniverseData).toString() + ';',
+    k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';',
+  ];
+}
+
+export function generateMySqlDump(unzippedDir: string, outputPath: string, tableName?: string): void {
   // Build name cache for celestial objects before processing any tables
   celestialNameCache = buildNameCache(unzippedDir);
 
-  let dump = fs.readFileSync(schemaPath, 'utf-8');
-  const lines = dump.split('\n');
-  const newLines: string[] = [];
+  const output: string[] = [generateMysqlDdl(), '-- Data', ''];
 
-  for (let i = 0; i < lines.length; i++) {
-    newLines.push(lines[i]);
-    // Look for DISABLE KEYS line
-    if (lines[i].includes('DISABLE KEYS')) {
-      // Find the table name from previous lines
-      let currentTableName = '';
-      for (let j = i - 1; j >= 0; j--) {
-        if (lines[j].includes('LOCK TABLES `')) {
-          const match = lines[j].match(/LOCK TABLES `([^`]+)`/);
-          if (match) {
-            currentTableName = match[1];
-            break;
-          }
-        }
+  // Static data
+  if (!tableName) {
+    output.push(...getStaticInserts(knexMysql));
+    output.push('');
+  } else if (staticDataTables.has(tableName)) {
+    const k = knexMysql;
+    if (tableName === 'invFlags') output.push(k('invFlags').insert(invFlagsData).toString() + ';');
+    if (tableName === 'mapUniverse') output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';');
+    if (tableName === 'trnTranslationColumns') output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';');
+    output.push('');
+  }
+
+  // JSONL-sourced tables
+  for (const currentTableName of tableOrder) {
+    if (!tableMappings[currentTableName]) continue;
+    if (tableName && currentTableName !== tableName) continue;
+    try {
+      const rows = processTable(currentTableName, unzippedDir);
+      for (const line of serializeInsertRows(rows)) {
+        output.push(line);
       }
-      if (currentTableName && tableMappings[currentTableName] && (!tableName || currentTableName === tableName)) {
-        try {
-          const rows = processTable(currentTableName, unzippedDir);
-          for (const line of serializeInsertRows(rows)) {
-            newLines.push(line);
-          }
-        } catch (e: any) {
-          console.warn(`Skipping ${currentTableName}: ${e.message}`);
-        }
-      }
+    } catch (e: any) {
+      console.warn(`Skipping ${currentTableName}: ${e.message}`);
     }
   }
 
-  fs.writeFileSync(outputPath, newLines.join('\n'));
+  fs.writeFileSync(outputPath, output.join('\n'));
 }
 
-export function convertToSqlite(mysqlDumpPath: string, sqlitePath: string, mysql2sqlitePath: string): void {
-  const command = `awk -f ${mysql2sqlitePath} ${mysqlDumpPath} | sqlite3 ${sqlitePath}`; // -echo -bail
-  console.log(command);
-  // process.exit();
-  execSync(command, { stdio: 'inherit' });
-}
+export function convertToSqlite(mysqlDumpPath: string, sqlitePath: string): void {
+  // Generate SQLite DDL from knex schema builder
+  const sqliteDdl = generateSqliteDdl();
 
-export function convertToPgsql(mysqlDumpPath: string, pgsqlPath: string, mysql2pgsqlPath: string): void {
-  const command = `awk -f ${mysql2pgsqlPath} ${mysqlDumpPath} > ${pgsqlPath}`;
-  console.log(command);
-  execSync(command, { stdio: 'inherit' });
+  // Extract INSERT lines from the MySQL dump.
+  // MySQL multi-value INSERT syntax is valid SQLite, but knex uses \' to escape
+  // single quotes while SQLite only accepts ''. Normalise before importing.
+  const mysqlDump = fs.readFileSync(mysqlDumpPath, 'utf-8');
+  const insertLines = mysqlDump
+    .split('\n')
+    .filter(line => /^insert into/i.test(line.trimStart()))
+    .map(line => line.replace(/\\'/g, "''"));
+
+  const sqliteSql = [
+    'PRAGMA synchronous = OFF;',
+    'PRAGMA journal_mode = MEMORY;',
+    'BEGIN TRANSACTION;',
+    sqliteDdl,
+    ...insertLines,
+    'COMMIT;',
+  ].join('\n');
+
+  const tmpFile = path.join(path.dirname(sqlitePath), '.sqlite_import.sql');
+  fs.writeFileSync(tmpFile, sqliteSql);
+  try {
+    console.log(`sqlite3 ${sqlitePath} < ${tmpFile}`);
+    execSync(`sqlite3 "${sqlitePath}" < "${tmpFile}"`, { stdio: 'inherit' });
+  } finally {
+    fs.unlinkSync(tmpFile);
+  }
 }
 
 /**
- * Convert a MySQL column type string to PostgreSQL equivalent.
- */
-function mysqlTypeToPgsql(mysqlType: string): string {
-  let t = mysqlType.trim();
-  // Remove UNSIGNED
-  t = t.replace(/\s+unsigned/i, '');
-  // Remove character set / collate
-  t = t.replace(/\s+CHARACTER\s+SET\s+\S+/i, '');
-  t = t.replace(/\s+COLLATE\s+\S+/i, '');
-
-  // bigint(N) -> BIGINT  (must come before int)
-  if (/^bigint/i.test(t)) return 'BIGINT';
-  // mediumint(N) -> INTEGER
-  if (/^mediumint/i.test(t)) return 'INTEGER';
-  // smallint(N) -> SMALLINT
-  if (/^smallint/i.test(t)) return 'SMALLINT';
-  // tinyint(N) -> SMALLINT
-  if (/^tinyint/i.test(t)) return 'SMALLINT';
-  // int(N) -> BIGINT (MySQL schema display width doesn't cap real storage,
-  // and actual SDE data can exceed INT32 range e.g. crpNPCCorporations.publicShares)
-  if (/^int/i.test(t)) return 'BIGINT';
-
-  // float -> REAL
-  if (/^float/i.test(t)) return 'REAL';
-  // double -> DOUBLE PRECISION
-  if (/^double/i.test(t)) return 'DOUBLE PRECISION';
-
-  // decimal(M,N) -> NUMERIC(M,N)
-  const decMatch = t.match(/^decimal\((\d+),\s*(\d+)\)/i);
-  if (decMatch) return `NUMERIC(${decMatch[1]},${decMatch[2]})`;
-  if (/^decimal/i.test(t)) return 'NUMERIC';
-
-  // varchar(N) -> TEXT (avoid length overflow; PG TEXT is equivalent to unlimited varchar)
-  const varcharMatch = t.match(/^varchar\((\d+)\)/i);
-  if (varcharMatch) return 'TEXT';
-
-  // text variants
-  if (/^(longtext|mediumtext|tinytext|text)/i.test(t)) return 'TEXT';
-
-  return t;
-}
-
-/**
- * Convert MySQL schema.sql DDL into PostgreSQL DDL (pure TypeScript).
- * Returns the full PG schema as a string.
- */
-function convertMysqlSchemaToPgsql(schemaContent: string): string {
-  const lines = schemaContent.split('\n');
-  const out: string[] = [];
-  // Collect CREATE INDEX statements derived from KEY lines
-  const indexStatements: string[] = [];
-  let currentTable = '';
-  let inCreate = false;
-  let createLines: string[] = [];
-
-  out.push('-- PostgreSQL dump converted from MySQL schema');
-  out.push("SET client_encoding = 'UTF8';");
-  out.push('SET standard_conforming_strings = on;');
-  out.push('');
-
-  for (const rawLine of lines) {
-    const line = rawLine.trimEnd();
-
-    // Skip MySQL-specific comment directives /*!...*/
-    if (/^\/\*!\d+/.test(line)) continue;
-    // Skip LOCK/UNLOCK TABLES
-    if (/^(LOCK TABLES|UNLOCK TABLES)/i.test(line)) continue;
-
-    // DROP TABLE
-    if (/^DROP TABLE IF EXISTS/i.test(line)) {
-      const tbl = line.match(/`([^`]+)`/)?.[1] || '';
-      out.push(`DROP TABLE IF EXISTS "${tbl}" CASCADE;`);
-      continue;
-    }
-
-    // Start of CREATE TABLE
-    if (/^CREATE TABLE/i.test(line)) {
-      currentTable = line.match(/`([^`]+)`/)?.[1] || '';
-      inCreate = true;
-      createLines = [];
-      continue;
-    }
-
-    // Inside CREATE TABLE body
-    if (inCreate) {
-      // End of CREATE TABLE (ENGINE= line)
-      if (/^\)\s*ENGINE/i.test(line)) {
-        // Emit PG CREATE TABLE
-        out.push(`CREATE TABLE "${currentTable}" (`);
-        for (let i = 0; i < createLines.length; i++) {
-          const comma = i < createLines.length - 1 ? ',' : '';
-          out.push(`  ${createLines[i]}${comma}`);
-        }
-        out.push(');');
-        out.push('');
-        inCreate = false;
-        currentTable = '';
-        continue;
-      }
-
-      // Parse the line
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('--')) continue;
-
-      // Remove trailing comma
-      const cleaned = trimmed.replace(/,\s*$/, '');
-
-      // PRIMARY KEY
-      const pkMatch = cleaned.match(/^PRIMARY KEY\s*\((.+)\)/i);
-      if (pkMatch) {
-        const pkCols = pkMatch[1].replace(/`/g, '"');
-        createLines.push(`PRIMARY KEY (${pkCols})`);
-        continue;
-      }
-
-      // UNIQUE KEY `name` (cols) -> UNIQUE (cols)  +  CREATE UNIQUE INDEX
-      const ukMatch = cleaned.match(/^UNIQUE KEY\s+`([^`]+)`\s*\((.+)\)/i);
-      if (ukMatch) {
-        const idxName = ukMatch[1];
-        const idxCols = ukMatch[2].replace(/`/g, '"');
-        createLines.push(`UNIQUE (${idxCols})`);
-        // Also create named index for queries relying on index name
-        indexStatements.push(`CREATE UNIQUE INDEX "${idxName}" ON "${currentTable}" (${idxCols});`);
-        continue;
-      }
-
-      // KEY `name` (cols) -> CREATE INDEX (not part of CREATE TABLE)
-      const keyMatch = cleaned.match(/^KEY\s+`([^`]+)`\s*\((.+)\)/i);
-      if (keyMatch) {
-        const idxName = keyMatch[1];
-        let idxCols = keyMatch[2].replace(/`/g, '"');
-        // Remove key-length hints like (10)
-        idxCols = idxCols.replace(/\(\d+\)/g, '');
-        indexStatements.push(`CREATE INDEX "${idxName}" ON "${currentTable}" (${idxCols});`);
-        continue;
-      }
-
-      // CONSTRAINT ... CHECK (...)  - PG supports this natively
-      const constraintMatch = cleaned.match(/^CONSTRAINT\s+`([^`]+)`\s+CHECK\s*\((.+)\)/i);
-      if (constraintMatch) {
-        const cName = constraintMatch[1];
-        const cExpr = constraintMatch[2].replace(/`/g, '"');
-        createLines.push(`CONSTRAINT "${cName}" CHECK (${cExpr})`);
-        continue;
-      }
-
-      // Column definition
-      const colMatch = cleaned.match(/^`([^`]+)`\s+(.+)/);
-      if (colMatch) {
-        const colName = colMatch[1];
-        let rest = colMatch[2];
-        // Extract type (first word or type with parens)
-        const typeMatch = rest.match(/^(\S+(?:\([^)]*\))?)\s*(.*)/);
-        if (typeMatch) {
-          const mysqlType = typeMatch[1];
-          let modifiers = typeMatch[2];
-          const pgType = mysqlTypeToPgsql(mysqlType);
-
-          // Clean modifiers
-          modifiers = modifiers.replace(/\s+unsigned/gi, '');
-          modifiers = modifiers.replace(/\s+AUTO_INCREMENT/gi, '');
-          modifiers = modifiers.replace(/\s+CHARACTER\s+SET\s+\S+/gi, '');
-          modifiers = modifiers.replace(/\s+COLLATE\s+\S+/gi, '');
-          modifiers = modifiers.replace(/\s+COMMENT\s+'[^']*'/gi, '');
-          modifiers = modifiers.replace(/\s+ON\s+UPDATE\s+CURRENT_TIMESTAMP(\(\))?/gi, '');
-          modifiers = modifiers.replace(/\s+DEFAULT\s+CURRENT_TIMESTAMP(\(\))?/gi, ' DEFAULT CURRENT_TIMESTAMP');
-
-          createLines.push(`"${colName}" ${pgType}${modifiers ? ' ' + modifiers.trim() : ''}`);
-        }
-        continue;
-      }
-    }
-
-    // Pre-existing INSERT statements (e.g. invFlags)
-    if (/^INSERT INTO/i.test(line)) {
-      // Convert backticks to double quotes
-      let pgLine = line.replace(/`/g, '"');
-      out.push(pgLine);
-      continue;
-    }
-
-    // Comments
-    if (line.startsWith('--')) {
-      out.push(line);
-      continue;
-    }
-  }
-
-  // Append index creation
-  if (indexStatements.length > 0) {
-    out.push('');
-    out.push('-- Indexes');
-    for (const idx of indexStatements) out.push(idx);
-  }
-
-  out.push('');
-  return out.join('\n');
-}
-
-/**
- * Serialize InsertRow objects as PostgreSQL INSERT statements.
- * Uses double-quoted identifiers instead of backticks.
- */
-function serializeInsertRowsPgsql(rows: InsertRow[], maxContentLength: number = 800 * 1024): string[] {
-  if (rows.length === 0) return [];
-
-  const groups = new Map<string, InsertRow[]>();
-  for (const row of rows) {
-    const key = `${row.table}\0${row.columns.join('\0')}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(row);
-  }
-
-  const result: string[] = [];
-  for (const group of groups.values()) {
-    const { table, columns } = group[0];
-    const colsPart = columns.map(c => `"${c}"`).join(', ');
-    const prefix = `INSERT INTO "${table}" (${colsPart}) VALUES `;
-    const prefixLen = Buffer.byteLength(prefix, 'utf8') + 1;
-
-    let valueParts: string[] = [];
-    let currentLen = prefixLen;
-
-    const flush = () => {
-      if (valueParts.length === 0) return;
-      result.push(`${prefix}${valueParts.join(',\n')};`);
-      valueParts = [];
-      currentLen = prefixLen;
-    };
-
-    for (const row of group) {
-      const valuePart = `(${row.values.map(serializeSqlValue).join(', ')})`;
-      const addLen = Buffer.byteLength(valuePart, 'utf8') + 2;
-      if (valueParts.length > 0 && currentLen + addLen > maxContentLength) flush();
-      valueParts.push(valuePart);
-      currentLen += addLen;
-    }
-    flush();
-  }
-  return result;
-}
-
-/**
- * Generate PostgreSQL dump directly from JSONL data (no awk conversion).
- * Converts MySQL schema to PG DDL, then fills with PG INSERT statements.
+ * Generate PostgreSQL dump directly from JSONL data using knex PG query builder.
  */
 export function generatePgsqlDump(
-  schemaPath: string,
   unzippedDir: string,
   outputPath: string,
   tableName?: string,
 ): void {
   celestialNameCache = buildNameCache(unzippedDir);
 
-  const schemaContent = fs.readFileSync(schemaPath, 'utf-8');
-  const pgSchema = convertMysqlSchemaToPgsql(schemaContent);
+  const output: string[] = [generatePgsqlDdl(), '-- Data', ''];
 
-  // Split PG schema to insert data after each table's CREATE TABLE + pre-existing INSERTs
-  // Strategy: just append all INSERT statements at the end (after schema)
-  const dataLines: string[] = [];
+  // Static data
+  if (!tableName) {
+    output.push(...getStaticInserts(knexPg));
+    output.push('');
+  } else if (staticDataTables.has(tableName)) {
+    const k = knexPg;
+    if (tableName === 'invFlags') output.push(k('invFlags').insert(invFlagsData).toString() + ';');
+    if (tableName === 'mapUniverse') output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';');
+    if (tableName === 'trnTranslationColumns') output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';');
+    output.push('');
+  }
 
-  // Parse schema.sql to find tables, same logic as generateMySqlDump
-  const schemaLines = schemaContent.split('\n');
-  for (let i = 0; i < schemaLines.length; i++) {
-    if (schemaLines[i].includes('DISABLE KEYS')) {
-      let currentTableName = '';
-      for (let j = i - 1; j >= 0; j--) {
-        if (schemaLines[j].includes('LOCK TABLES `')) {
-          const match = schemaLines[j].match(/LOCK TABLES `([^`]+)`/);
-          if (match) {
-            currentTableName = match[1];
-            break;
-          }
+  // JSONL-sourced tables
+  for (const currentTableName of tableOrder) {
+    if (!tableMappings[currentTableName]) continue;
+    if (tableName && currentTableName !== tableName) continue;
+    try {
+      const rows = processTable(currentTableName, unzippedDir);
+      if (rows.length === 0) continue;
+      const groups = new Map<string, InsertRow[]>();
+      for (const row of rows) {
+        const key = `${row.table}\0${row.columns.join('\0')}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(row);
+      }
+      for (const group of groups.values()) {
+        const { table } = group[0];
+        const BATCH = 500;
+        for (let i = 0; i < group.length; i += BATCH) {
+          const batch = group.slice(i, i + BATCH);
+          output.push(knexPg(table).insert(insertRowsToObjects(batch)).toString() + ';');
         }
       }
-      if (currentTableName && tableMappings[currentTableName] && (!tableName || currentTableName === tableName)) {
-        try {
-          const rows = processTable(currentTableName, unzippedDir);
-          for (const line of serializeInsertRowsPgsql(rows)) {
-            dataLines.push(line);
-          }
-        } catch (e: any) {
-          console.warn(`Skipping ${currentTableName}: ${e.message}`);
-        }
-      }
+    } catch (e: any) {
+      console.warn(`Skipping ${currentTableName}: ${e.message}`);
     }
   }
 
-  const output = pgSchema + '\n-- Data\n' + dataLines.join('\n') + '\n';
-  fs.writeFileSync(outputPath, output);
+  fs.writeFileSync(outputPath, output.join('\n'));
 }
 
 export const tableMappings: Record<string, { files: string[]; fields: Array<string | { name: string; transform: (item: any, subItem?: any, fileName?: string) => any }>; expand?: string; filter?: (item: any) => boolean }> = {

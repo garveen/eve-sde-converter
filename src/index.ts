@@ -58,7 +58,6 @@ program.command('convert')
       }
 
       // Generate MySQL dump
-      const schemaPath = path.join(__dirname, 'schema.sql');
       const mysqlDumpPath = path.join(__dirname, '..', 'output', 'sde.sql');
 
       // Ensure output directory exists
@@ -68,11 +67,10 @@ program.command('convert')
       }
 
       console.log('Generating MySQL dump...');
-      generateMySqlDump(schemaPath, unzippedDir, mysqlDumpPath, options.table);
+      generateMySqlDump(unzippedDir, mysqlDumpPath, options.table);
 
       // Convert to SQLite
       const sqlitePath = path.join(__dirname, '..', 'output', 'sde.sqlite');
-      const mysql2sqlitePath = path.join(__dirname, '..', 'utils', 'mysql2sqlite');
       if (!fs.existsSync(sqlitePath)) {
         // create file
         fs.writeFileSync(sqlitePath, '');
@@ -83,10 +81,10 @@ program.command('convert')
       const pgsqlPath = path.join(__dirname, '..', 'output', 'sde-postgres.sql');
 
       console.log('Generating PostgreSQL dump...');
-      generatePgsqlDump(schemaPath, unzippedDir, pgsqlPath, options.table);
+      generatePgsqlDump(unzippedDir, pgsqlPath, options.table);
 
       console.log('Converting to SQLite...');
-      convertToSqlite(mysqlDumpPath, sqlitePath, mysql2sqlitePath);
+      convertToSqlite(mysqlDumpPath, sqlitePath);
 
       console.log('Conversion completed successfully!');
     } catch (error) {
