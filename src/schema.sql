@@ -1949,7 +1949,7 @@ CREATE TABLE `staOperations` (
   `activityID` int(11) DEFAULT NULL,
   `operationID` int(11) NOT NULL,
   `operationName` varchar(100) DEFAULT NULL,
-  `description` varchar(1000) DEFAULT NULL,
+  `description` text DEFAULT NULL,
   `fringe` int(11) DEFAULT NULL,
   `corridor` int(11) DEFAULT NULL,
   `hub` int(11) DEFAULT NULL,
@@ -1983,7 +1983,7 @@ DROP TABLE IF EXISTS `staServices`;
 CREATE TABLE `staServices` (
   `serviceID` int(11) NOT NULL,
   `serviceName` varchar(100) DEFAULT NULL,
-  `description` varchar(1000) DEFAULT NULL,
+  `description` text DEFAULT NULL,
   PRIMARY KEY (`serviceID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

@@ -947,7 +947,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('activityID').nullable();
     table.integer('operationID').notNullable().primary();
     table.string('operationName', 100).nullable();
-    table.string('description', 1000).nullable();
+    table.text('description').nullable();
     table.integer('fringe').nullable();
     table.integer('corridor').nullable();
     table.integer('hub').nullable();
@@ -964,7 +964,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('serviceID').notNullable().primary();
     table.string('serviceName', 100).nullable();
-    table.string('description', 1000).nullable();
+    table.text('description').nullable();
   },
 
   staStations: (table, isMysql) => {
