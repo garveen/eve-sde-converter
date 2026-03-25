@@ -679,7 +679,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   invVolumes: (table, isMysql) => {
     if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable().primary();
-    table.integer('volume').nullable();
+    table.bigInteger('volume').nullable();
   },
 
   mapCelestialGraphics: (table, isMysql) => {

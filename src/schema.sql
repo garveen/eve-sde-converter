@@ -1282,7 +1282,7 @@ DROP TABLE IF EXISTS `invVolumes`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `invVolumes` (
   `typeID` int(11) NOT NULL,
-  `volume` int(11) DEFAULT NULL,
+  `volume` bigint DEFAULT NULL,
   PRIMARY KEY (`typeID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
