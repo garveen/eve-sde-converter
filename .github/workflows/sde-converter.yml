@@ -76,6 +76,10 @@ jobs:
         bzip2 output/sde.sql &
         bzip2 output/sde.sqlite &
         bzip2 output/sde-postgres.sql &
+        bzip2 output/sde-mssql.sql &
+        bzip2 output/sde-cockroachdb.sql &
+        bzip2 output/sde-redshift.sql &
+        bzip2 output/sde-oracle.sql &
         wait
 
     - name: Create and upload release
@@ -106,9 +110,20 @@ jobs:
         - sde.sql.bz2 (Compressed MySQL dump)
         - sde.sqlite.bz2 (Compressed SQLite database)
         - sde-postgres.sql.bz2 (Compressed PostgreSQL dump)
+        - sde-mssql.sql.bz2 (Compressed SQL Server dump)
+        - sde-cockroachdb.sql.bz2 (Compressed CockroachDB dump)
+        - sde-redshift.sql.bz2 (Compressed Amazon Redshift dump)
+        - sde-oracle.sql.bz2 (Compressed Oracle dump)
         RELEASE_NOTES
         
-        gh release create "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE" ./output/sde.sql.bz2 ./output/sde.sqlite.bz2 ./output/sde-postgres.sql.bz2
+        gh release create "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE" \
+          ./output/sde.sql.bz2 \
+          ./output/sde.sqlite.bz2 \
+          ./output/sde-postgres.sql.bz2 \
+          ./output/sde-mssql.sql.bz2 \
+          ./output/sde-cockroachdb.sql.bz2 \
+          ./output/sde-redshift.sql.bz2 \
+          ./output/sde-oracle.sql.bz2
         rm "$NOTES_FILE"
     - name: Notify Discord
       if: steps.check_release.outputs.exists == 'false' && env.DISCORD_WEBHOOK != ''

@@ -1,0 +1,199 @@
+name: SQL Validation
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install tsx
+        run: pnpm add -g tsx
+
+      - name: Get build info
+        id: build_info
+        run: |
+          TSX_OUTPUT=$(tsx src/index.ts check-update 2>&1 || true)
+          BUILD_NUMBER=$(echo "$TSX_OUTPUT" | grep "Latest build number:" | awk '{print $4}')
+          if [ -z "$BUILD_NUMBER" ]; then
+            echo "ERROR: Could not retrieve build number"
+            exit 1
+          fi
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Cache SDE unzipped data
+        id: cache_sde
+        uses: actions/cache@v4
+        with:
+          path: refs/unzipped
+          key: sde-unzipped-${{ steps.build_info.outputs.build_number }}
+
+      - name: Cache converted output
+        id: cache_output
+        uses: actions/cache@v4
+        with:
+          path: output
+          key: sde-output-${{ steps.build_info.outputs.build_number }}-${{ steps.build_info.outputs.commit_sha }}
+
+      - name: Convert (using cached SDE data)
+        if: steps.cache_output.outputs.cache-hit != 'true' && steps.cache_sde.outputs.cache-hit == 'true'
+        run: tsx src/index.ts convert --unzipped-dir refs/unzipped
+
+      - name: Convert (download + convert)
+        if: steps.cache_output.outputs.cache-hit != 'true' && steps.cache_sde.outputs.cache-hit != 'true'
+        run: tsx src/index.ts convert
+
+      - name: Install sqlite3
+        run: sudo apt-get install -y sqlite3
+
+      # ── MySQL ────────────────────────────────────────────────────────────────
+      - name: Test MySQL
+        run: |
+          docker run -d --name mysql-test \
+            -e MYSQL_ROOT_PASSWORD=root \
+            -e MYSQL_DATABASE=sde \
+            mysql:8
+
+          echo "Waiting for MySQL..."
+          timeout 120 bash -c \
+            'until docker exec mysql-test mysqladmin ping -u root -proot --silent 2>/dev/null; do sleep 2; done'
+
+          docker cp output/sde.sql mysql-test:/tmp/sde.sql
+          docker exec mysql-test bash -c "mysql -u root -proot sde < /tmp/sde.sql"
+          echo "MySQL: OK"
+          docker rm -f mysql-test
+
+      # ── PostgreSQL ───────────────────────────────────────────────────────────
+      - name: Test PostgreSQL
+        run: |
+          docker run -d --name postgres-test \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=sde \
+            postgres:16
+
+          echo "Waiting for PostgreSQL..."
+          timeout 60 bash -c \
+            'until docker exec postgres-test pg_isready -U postgres 2>/dev/null; do sleep 2; done'
+
+          docker cp output/sde-postgres.sql postgres-test:/tmp/sde-postgres.sql
+          docker exec postgres-test bash -c "psql -U postgres -d sde -f /tmp/sde-postgres.sql"
+          echo "PostgreSQL: OK"
+          docker rm -f postgres-test
+
+      # ── SQLite ───────────────────────────────────────────────────────────────
+      - name: Test SQLite
+        run: |
+          TABLE_COUNT=$(sqlite3 output/sde.sqlite ".tables" | wc -w)
+          if [ "$TABLE_COUNT" -eq 0 ]; then
+            echo "ERROR: No tables found in SQLite database"
+            exit 1
+          fi
+          echo "SQLite: OK ($TABLE_COUNT tables)"
+
+      # ── SQL Server (MSSQL) ───────────────────────────────────────────────────
+      - name: Test SQL Server
+        run: |
+          docker run -d --name mssql-test \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD='YourStrong!Passw0rd' \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+          echo "Waiting for SQL Server..."
+          timeout 120 bash -c \
+            'until docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
+              -S localhost -U SA -P "YourStrong!Passw0rd" -C -Q "SELECT 1" 2>/dev/null; \
+            do sleep 3; done'
+
+          docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U SA -P 'YourStrong!Passw0rd' -C \
+            -Q "CREATE DATABASE sde"
+
+          docker cp output/sde-mssql.sql mssql-test:/tmp/sde-mssql.sql
+          docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U SA -P 'YourStrong!Passw0rd' -C \
+            -d sde -i /tmp/sde-mssql.sql
+          echo "SQL Server: OK"
+          docker rm -f mssql-test
+
+      # ── CockroachDB ──────────────────────────────────────────────────────────
+      - name: Test CockroachDB
+        run: |
+          docker run -d --name cockroach-test \
+            cockroachdb/cockroach:latest \
+            start-single-node --insecure
+
+          echo "Waiting for CockroachDB..."
+          timeout 120 bash -c \
+            'until docker exec cockroach-test ./cockroach sql --insecure -e "SELECT 1" 2>/dev/null; \
+            do sleep 2; done'
+
+          docker exec cockroach-test ./cockroach sql --insecure -e "CREATE DATABASE sde"
+          docker cp output/sde-cockroachdb.sql cockroach-test:/tmp/sde-cockroachdb.sql
+          docker exec cockroach-test ./cockroach sql --insecure -d sde \
+            -f /tmp/sde-cockroachdb.sql
+          echo "CockroachDB: OK"
+          docker rm -f cockroach-test
+
+      # ── Amazon Redshift (tested via PostgreSQL) ──────────────────────────────
+      # Redshift has no official local Docker image; its SQL dialect is
+      # PostgreSQL-compatible, so we validate against a PostgreSQL container.
+      - name: Test Redshift (via PostgreSQL)
+        run: |
+          docker run -d --name redshift-test \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=sde \
+            postgres:16
+
+          echo "Waiting for PostgreSQL (Redshift proxy)..."
+          timeout 60 bash -c \
+            'until docker exec redshift-test pg_isready -U postgres 2>/dev/null; do sleep 2; done'
+
+          docker cp output/sde-redshift.sql redshift-test:/tmp/sde-redshift.sql
+          docker exec redshift-test bash -c "psql -U postgres -d sde -f /tmp/sde-redshift.sql"
+          echo "Redshift (via PostgreSQL): OK"
+          docker rm -f redshift-test
+
+      # ── Oracle ───────────────────────────────────────────────────────────────
+      - name: Test Oracle
+        run: |
+          docker run -d --name oracle-test \
+            -e ORACLE_PASSWORD=Oracle_123 \
+            -e APP_USER=sde \
+            -e APP_USER_PASSWORD=Oracle_123 \
+            gvenzl/oracle-free:slim
+
+          echo "Waiting for Oracle (this may take several minutes)..."
+          timeout 300 bash -c \
+            'until [ "$(docker inspect --format="{{.State.Health.Status}}" oracle-test 2>/dev/null)" = "healthy" ]; \
+            do sleep 5; done'
+
+          docker cp output/sde-oracle.sql oracle-test:/tmp/sde-oracle.sql
+          docker exec oracle-test bash -c \
+            '{ cat /tmp/sde-oracle.sql; echo "EXIT;"; } | sqlplus -s sde/Oracle_123@//localhost:1521/FREEPDB1'
+          echo "Oracle: OK"
+          docker rm -f oracle-test
