@@ -185,6 +185,14 @@ export const trnTranslationColumnsData: Array<{ tcGroupID: number | null; tcID: 
 type TableDefineFn = (table: Knex.CreateTableBuilder, isMysql: boolean) => void;
 
 /**
+ * Creates a boolean column: TINYINT(1) on MySQL (compatible with yamlloader),
+ * native BOOLEAN on all other dialects (PostgreSQL, SQLite, MSSQL, CockroachDB).
+ */
+function boolCol(table: Knex.CreateTableBuilder, name: string, isMysql: boolean) {
+  return isMysql ? table.tinyint(name, 1) : table.boolean(name);
+}
+
+/**
  * All table definitions. Each function receives the knex table builder and a
  * flag indicating whether the target dialect is MySQL (so mysql-specific
  * helpers like engine/charset can be applied).
@@ -205,10 +213,10 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('level').nullable();
     table.integer('quality').nullable();
     table.integer('agentTypeID').nullable();
-    table.tinyint('isLocator', 1).nullable();
+    boolCol(table, 'isLocator', isMysql).nullable();
     table.index(['corporationID'], 'ix_agtAgents_corporationID');
     table.index(['locationID'], 'ix_agtAgents_locationID');
-    table.check('?? in (0,1)', ['isLocator'], 'aa_isloc');
+    if (isMysql) table.check('?? in (0,1)', ['isLocator'], 'aa_isloc');
   },
 
   agtAgentsInSpace: (table, isMysql) => {
@@ -350,7 +358,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.bigInteger('publicShares').nullable();
     table.integer('initialPrice').nullable();
     table.specificType('minSecurity', 'float').nullable();
-    table.tinyint('scattered', 1).nullable();
+    boolCol(table, 'scattered', isMysql).nullable();
     table.integer('fringe').nullable();
     table.integer('corridor').nullable();
     table.integer('hub').nullable();
@@ -361,7 +369,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('stationSystemCount').nullable();
     table.string('description', 4000).nullable();
     table.integer('iconID').nullable();
-    table.check('?? in (0,1)', ['scattered'], 'cnpcc_scatt');
+    if (isMysql) table.check('?? in (0,1)', ['scattered'], 'cnpcc_scatt');
   },
 
   crpNPCDivisions: (table, isMysql) => {
@@ -386,15 +394,15 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.string('description', 1000).nullable();
     table.integer('iconID').nullable();
     table.specificType('defaultValue', 'float').nullable();
-    table.tinyint('published', 1).nullable();
+    boolCol(table, 'published', isMysql).nullable();
     table.string('displayName', 150).nullable();
     table.integer('unitID').nullable();
-    table.tinyint('stackable', 1).nullable();
-    table.tinyint('highIsGood', 1).nullable();
+    boolCol(table, 'stackable', isMysql).nullable();
+    boolCol(table, 'highIsGood', isMysql).nullable();
     table.integer('categoryID').nullable();
-    table.check('?? in (0,1)', ['published'], 'dat_pub');
-    table.check('?? in (0,1)', ['stackable'], 'dat_stack');
-    table.check('?? in (0,1)', ['highIsGood'], 'dat_hig');
+    if (isMysql) table.check('?? in (0,1)', ['published'], 'dat_pub');
+    if (isMysql) table.check('?? in (0,1)', ['stackable'], 'dat_stack');
+    if (isMysql) table.check('?? in (0,1)', ['highIsGood'], 'dat_hig');
   },
 
   dgmEffects: (table, isMysql) => {
@@ -407,34 +415,34 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.string('description', 1000).nullable();
     table.string('guid', 60).nullable();
     table.integer('iconID').nullable();
-    table.tinyint('isOffensive', 1).nullable();
-    table.tinyint('isAssistance', 1).nullable();
+    boolCol(table, 'isOffensive', isMysql).nullable();
+    boolCol(table, 'isAssistance', isMysql).nullable();
     table.integer('durationAttributeID').nullable();
     table.integer('trackingSpeedAttributeID').nullable();
     table.integer('dischargeAttributeID').nullable();
     table.integer('rangeAttributeID').nullable();
     table.integer('falloffAttributeID').nullable();
-    table.tinyint('disallowAutoRepeat', 1).nullable();
-    table.tinyint('published', 1).nullable();
+    boolCol(table, 'disallowAutoRepeat', isMysql).nullable();
+    boolCol(table, 'published', isMysql).nullable();
     table.string('displayName', 100).nullable();
-    table.tinyint('isWarpSafe', 1).nullable();
-    table.tinyint('rangeChance', 1).nullable();
-    table.tinyint('electronicChance', 1).nullable();
-    table.tinyint('propulsionChance', 1).nullable();
+    boolCol(table, 'isWarpSafe', isMysql).nullable();
+    boolCol(table, 'rangeChance', isMysql).nullable();
+    boolCol(table, 'electronicChance', isMysql).nullable();
+    boolCol(table, 'propulsionChance', isMysql).nullable();
     table.integer('distribution').nullable();
     table.string('sfxName', 20).nullable();
     table.integer('npcUsageChanceAttributeID').nullable();
     table.integer('npcActivationChanceAttributeID').nullable();
     table.integer('fittingUsageChanceAttributeID').nullable();
     table.text('modifierInfo').nullable();
-    table.check('?? in (0,1)', ['isOffensive'], 'de_offense');
-    table.check('?? in (0,1)', ['isAssistance'], 'de_assist');
-    table.check('?? in (0,1)', ['disallowAutoRepeat'], 'de_disallowar');
-    table.check('?? in (0,1)', ['published'], 'de_published');
-    table.check('?? in (0,1)', ['isWarpSafe'], 'de_warpsafe');
-    table.check('?? in (0,1)', ['rangeChance'], 'de_rangechance');
-    table.check('?? in (0,1)', ['electronicChance'], 'de_elecchance');
-    table.check('?? in (0,1)', ['propulsionChance'], 'de_propchance');
+    if (isMysql) table.check('?? in (0,1)', ['isOffensive'], 'de_offense');
+    if (isMysql) table.check('?? in (0,1)', ['isAssistance'], 'de_assist');
+    if (isMysql) table.check('?? in (0,1)', ['disallowAutoRepeat'], 'de_disallowar');
+    if (isMysql) table.check('?? in (0,1)', ['published'], 'de_published');
+    if (isMysql) table.check('?? in (0,1)', ['isWarpSafe'], 'de_warpsafe');
+    if (isMysql) table.check('?? in (0,1)', ['rangeChance'], 'de_rangechance');
+    if (isMysql) table.check('?? in (0,1)', ['electronicChance'], 'de_elecchance');
+    if (isMysql) table.check('?? in (0,1)', ['propulsionChance'], 'de_propchance');
   },
 
   dgmTypeAttributes: (table, isMysql) => {
@@ -451,9 +459,9 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable();
     table.integer('effectID').notNullable();
-    table.tinyint('isDefault', 1).nullable();
+    boolCol(table, 'isDefault', isMysql).nullable();
     table.primary(['typeID', 'effectID']);
-    table.check('?? in (0,1)', ['isDefault'], 'dte_default');
+    if (isMysql) table.check('?? in (0,1)', ['isDefault'], 'dte_default');
   },
 
   eveGraphics: (table, isMysql) => {
@@ -542,8 +550,8 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('categoryID').notNullable().primary();
     table.string('categoryName', 100).nullable();
     table.integer('iconID').nullable();
-    table.tinyint('published', 1).nullable();
-    table.check('?? in (0,1)', ['published'], 'invcat_published');
+    boolCol(table, 'published', isMysql).nullable();
+    if (isMysql) table.check('?? in (0,1)', ['published'], 'invcat_published');
   },
 
   invContrabandTypes: (table, isMysql) => {
@@ -583,17 +591,17 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('categoryID').nullable();
     table.string('groupName', 100).nullable();
     table.integer('iconID').nullable();
-    table.tinyint('useBasePrice', 1).nullable();
-    table.tinyint('anchored', 1).nullable();
-    table.tinyint('anchorable', 1).nullable();
-    table.tinyint('fittableNonSingleton', 1).nullable();
-    table.tinyint('published', 1).nullable();
+    boolCol(table, 'useBasePrice', isMysql).nullable();
+    boolCol(table, 'anchored', isMysql).nullable();
+    boolCol(table, 'anchorable', isMysql).nullable();
+    boolCol(table, 'fittableNonSingleton', isMysql).nullable();
+    boolCol(table, 'published', isMysql).nullable();
     table.index(['categoryID'], 'ix_invGroups_categoryID');
-    table.check('?? in (0,1)', ['useBasePrice'], 'invgroup_usebaseprice');
-    table.check('?? in (0,1)', ['anchored'], 'invgroup_anchored');
-    table.check('?? in (0,1)', ['anchorable'], 'invgroup_anchorable');
-    table.check('?? in (0,1)', ['fittableNonSingleton'], 'invgroup_fitnonsingle');
-    table.check('?? in (0,1)', ['published'], 'invgroup_published');
+    if (isMysql) table.check('?? in (0,1)', ['useBasePrice'], 'invgroup_usebaseprice');
+    if (isMysql) table.check('?? in (0,1)', ['anchored'], 'invgroup_anchored');
+    if (isMysql) table.check('?? in (0,1)', ['anchorable'], 'invgroup_anchorable');
+    if (isMysql) table.check('?? in (0,1)', ['fittableNonSingleton'], 'invgroup_fitnonsingle');
+    if (isMysql) table.check('?? in (0,1)', ['published'], 'invgroup_published');
   },
 
   invMarketGroups: (table, isMysql) => {
@@ -603,8 +611,8 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.string('marketGroupName', 100).nullable();
     table.string('description', 3000).nullable();
     table.integer('iconID').nullable();
-    table.tinyint('hasTypes', 1).nullable();
-    table.check('?? in (0,1)', ['hasTypes'], 'invmarketgroups_hastypes');
+    boolCol(table, 'hasTypes', isMysql).nullable();
+    if (isMysql) table.check('?? in (0,1)', ['hasTypes'], 'invmarketgroups_hastypes');
   },
 
   invMetaGroups: (table, isMysql) => {
@@ -658,13 +666,13 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('portionSize').nullable();
     table.integer('raceID').nullable();
     table.decimal('basePrice', 19, 4).nullable();
-    table.tinyint('published', 1).nullable();
+    boolCol(table, 'published', isMysql).nullable();
     table.integer('marketGroupID').nullable();
     table.integer('iconID').nullable();
     table.integer('soundID').nullable();
     table.integer('graphicID').nullable();
     table.index(['groupID'], 'ix_invTypes_groupID');
-    table.check('?? in (0,1)', ['published'], 'invtype_published');
+    if (isMysql) table.check('?? in (0,1)', ['published'], 'invtype_published');
   },
 
   invUniqueNames: (table, isMysql) => {
@@ -688,8 +696,8 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('heightMap1').nullable();
     table.integer('heightMap2').nullable();
     table.integer('shaderPreset').nullable();
-    table.tinyint('population', 1).nullable();
-    table.check('?? in (0,1)', ['population'], 'CONSTRAINT_1');
+    boolCol(table, 'population', isMysql).nullable();
+    if (isMysql) table.check('?? in (0,1)', ['population'], 'CONSTRAINT_1');
   },
 
   mapCelestialStatistics: (table, isMysql) => {
@@ -704,18 +712,18 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.double('eccentricity').nullable();
     table.double('massDust').nullable();
     table.double('massGas').nullable();
-    table.tinyint('fragmented', 1).nullable();
+    boolCol(table, 'fragmented', isMysql).nullable();
     table.double('density').nullable();
     table.double('surfaceGravity').nullable();
     table.double('escapeVelocity').nullable();
     table.double('orbitPeriod').nullable();
     table.double('rotationRate').nullable();
-    table.tinyint('locked', 1).nullable();
+    boolCol(table, 'locked', isMysql).nullable();
     table.double('pressure').nullable();
     table.double('radius').nullable();
     table.integer('mass').nullable();
-    table.check('?? in (0,1)', ['fragmented'], 'mapcelestialstats_frag');
-    table.check('?? in (0,1)', ['locked'], 'mapcelestialstats_locked');
+    if (isMysql) table.check('?? in (0,1)', ['fragmented'], 'mapcelestialstats_frag');
+    if (isMysql) table.check('?? in (0,1)', ['locked'], 'mapcelestialstats_locked');
   },
 
   mapConstellationJumps: (table, isMysql) => {
@@ -842,13 +850,13 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.double('zMin').nullable();
     table.double('zMax').nullable();
     table.double('luminosity').nullable();
-    table.tinyint('border', 1).nullable();
-    table.tinyint('fringe', 1).nullable();
-    table.tinyint('corridor', 1).nullable();
-    table.tinyint('hub', 1).nullable();
-    table.tinyint('international', 1).nullable();
-    table.tinyint('regional', 1).nullable();
-    table.tinyint('constellation', 1).nullable();
+    boolCol(table, 'border', isMysql).nullable();
+    boolCol(table, 'fringe', isMysql).nullable();
+    boolCol(table, 'corridor', isMysql).nullable();
+    boolCol(table, 'hub', isMysql).nullable();
+    boolCol(table, 'international', isMysql).nullable();
+    boolCol(table, 'regional', isMysql).nullable();
+    boolCol(table, 'constellation', isMysql).nullable();
     table.double('security').nullable();
     table.integer('factionID').nullable();
     table.double('radius').nullable();
@@ -857,13 +865,13 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.index(['regionID'], 'ix_mapSolarSystems_regionID');
     table.index(['security'], 'ix_mapSolarSystems_security');
     table.index(['constellationID'], 'ix_mapSolarSystems_constellationID');
-    table.check('?? in (0,1)', ['border'], 'mapss_border');
-    table.check('?? in (0,1)', ['fringe'], 'mapss_fringe');
-    table.check('?? in (0,1)', ['corridor'], 'mapss_corridor');
-    table.check('?? in (0,1)', ['hub'], 'mapss_hub');
-    table.check('?? in (0,1)', ['international'], 'mapss_internat');
-    table.check('?? in (0,1)', ['regional'], 'mapss_regional');
-    table.check('?? in (0,1)', ['constellation'], 'mapss_constel');
+    if (isMysql) table.check('?? in (0,1)', ['border'], 'mapss_border');
+    if (isMysql) table.check('?? in (0,1)', ['fringe'], 'mapss_fringe');
+    if (isMysql) table.check('?? in (0,1)', ['corridor'], 'mapss_corridor');
+    if (isMysql) table.check('?? in (0,1)', ['hub'], 'mapss_hub');
+    if (isMysql) table.check('?? in (0,1)', ['international'], 'mapss_internat');
+    if (isMysql) table.check('?? in (0,1)', ['regional'], 'mapss_regional');
+    if (isMysql) table.check('?? in (0,1)', ['constellation'], 'mapss_constel');
   },
 
   mapUniverse: (table, isMysql) => {
@@ -901,9 +909,9 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('schematicID').notNullable();
     table.integer('typeID').notNullable();
     table.integer('quantity').nullable();
-    table.tinyint('isInput', 1).nullable();
+    boolCol(table, 'isInput', isMysql).nullable();
     table.primary(['schematicID', 'typeID']);
-    table.check('?? in (0,1)', ['isInput'], 'pstm_input');
+    if (isMysql) table.check('?? in (0,1)', ['isInput'], 'pstm_input');
   },
 
   skinLicense: (table, isMysql) => {

@@ -1973,7 +1973,7 @@ export const tableMappings: Record<string, { files: string[]; fields: Array<stri
       { name: 'heightMap1', transform: (item: any) => item.attributes?.heightMap1 ?? null },
       { name: 'heightMap2', transform: (item: any) => item.attributes?.heightMap2 ?? null },
       { name: 'shaderPreset', transform: (item: any) => item.attributes?.shaderPreset ?? null },
-      { name: 'population', transform: (item: any) => item.attributes?.population != null ? (item.attributes.population ? 1 : 0) : null }
+      { name: 'population', transform: (item: any) => item.attributes?.population != null ? Boolean(item.attributes.population) : null }
     ],
     filter: (item: any) => item.attributes != null
   },
