@@ -1131,46 +1131,55 @@ export function generateOracleDump(
 ): void {
   celestialNameCache = buildNameCache(unzippedDir);
 
-  const output: string[] = [generateOracleDdl(), '-- Data', ''];
+  // Write directly to a file descriptor to avoid RangeError: Invalid string length
+  // when accumulating hundreds of thousands of single-row INSERT statements.
+  const fd = fs.openSync(outputPath, 'w');
+  const writeLine = (line: string) => fs.writeSync(fd, line + '\n');
 
-  if (!tableName) {
-    // Static data: emit one INSERT per row for Oracle compatibility
-    for (const row of invFlagsData) {
-      output.push(knexOracle('invFlags').insert(row).toString() + ';');
-    }
-    for (const row of mapUniverseData) {
-      output.push(knexOracle('mapUniverse').insert(row).toString() + ';');
-    }
-    for (const row of trnTranslationColumnsData) {
-      output.push(knexOracle('trnTranslationColumns').insert(row).toString() + ';');
-    }
-    output.push('');
-  } else if (staticDataTables.has(tableName)) {
-    const dataset =
-      tableName === 'invFlags' ? invFlagsData :
-      tableName === 'mapUniverse' ? mapUniverseData :
-      trnTranslationColumnsData;
-    for (const row of dataset) {
-      output.push(knexOracle(tableName).insert(row).toString() + ';');
-    }
-    output.push('');
-  }
+  try {
+    writeLine(generateOracleDdl());
+    writeLine('-- Data');
+    writeLine('');
 
-  for (const currentTableName of tableOrder) {
-    if (!tableMappings[currentTableName]) continue;
-    if (tableName && currentTableName !== tableName) continue;
-    try {
-      const rows = processTable(currentTableName, unzippedDir);
-      if (rows.length === 0) continue;
-      for (const row of insertRowsToObjects(rows)) {
-        output.push(knexOracle(currentTableName).insert(row).toString() + ';');
+    if (!tableName) {
+      // Static data: emit one INSERT per row for Oracle compatibility
+      for (const row of invFlagsData) {
+        writeLine(knexOracle('invFlags').insert(row).toString() + ';');
       }
-    } catch (e: any) {
-      console.warn(`Skipping ${currentTableName}: ${e.message}`);
+      for (const row of mapUniverseData) {
+        writeLine(knexOracle('mapUniverse').insert(row).toString() + ';');
+      }
+      for (const row of trnTranslationColumnsData) {
+        writeLine(knexOracle('trnTranslationColumns').insert(row).toString() + ';');
+      }
+      writeLine('');
+    } else if (staticDataTables.has(tableName)) {
+      const dataset =
+        tableName === 'invFlags' ? invFlagsData :
+        tableName === 'mapUniverse' ? mapUniverseData :
+        trnTranslationColumnsData;
+      for (const row of dataset) {
+        writeLine(knexOracle(tableName).insert(row).toString() + ';');
+      }
+      writeLine('');
     }
-  }
 
-  fs.writeFileSync(outputPath, output.join('\n'));
+    for (const currentTableName of tableOrder) {
+      if (!tableMappings[currentTableName]) continue;
+      if (tableName && currentTableName !== tableName) continue;
+      try {
+        const rows = processTable(currentTableName, unzippedDir);
+        if (rows.length === 0) continue;
+        for (const row of insertRowsToObjects(rows)) {
+          writeLine(knexOracle(currentTableName).insert(row).toString() + ';');
+        }
+      } catch (e: any) {
+        console.warn(`Skipping ${currentTableName}: ${e.message}`);
+      }
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 export const tableMappings: Record<string, { files: string[]; fields: Array<string | { name: string; transform: (item: any, subItem?: any, fileName?: string) => any }>; expand?: string; filter?: (item: any) => boolean }> = {
