@@ -301,11 +301,13 @@ function insertRowsToObjects(rows: InsertRow[]): Record<string, any>[] {
 
 /**
  * Serialize structured InsertRow objects into batched multi-row INSERT
- * statements using knex MySQL query builder.
+ * statements using the knex MySQL query builder. Each batch is capped by
+ * both row count and total byte size to stay within MySQL's max_allowed_packet.
  */
 export function serializeInsertRows(
   rows: InsertRow[],
   maxRowsPerBatch: number = 500,
+  maxContentLength: number = 500 * 1024,
 ): string[] {
   if (rows.length === 0) return [];
 
@@ -319,12 +321,30 @@ export function serializeInsertRows(
 
   const result: string[] = [];
   for (const group of groups.values()) {
-    const { table } = group[0];
-    for (let i = 0; i < group.length; i += maxRowsPerBatch) {
-      const batch = group.slice(i, i + maxRowsPerBatch);
-      const sql = knexMysql(table).insert(insertRowsToObjects(batch)).toString();
-      result.push(sql + ';');
+    let batch: InsertRow[] = [];
+    let batchBytes = 0;
+
+    const flush = () => {
+      if (batch.length === 0) return;
+      result.push(knexMysql(group[0].table).insert(insertRowsToObjects(batch)).toString() + ';');
+      batch = [];
+      batchBytes = 0;
+    };
+
+    for (const row of group) {
+      // Estimate row byte size without JSON.stringify: sum string lengths + fixed overhead per value
+      const rowBytes = row.values.reduce<number>((acc, v) => {
+        if (v === null || v === undefined) return acc + 4; // 'NULL'
+        if (typeof v === 'string') return acc + Buffer.byteLength(v, 'utf8') + 2; // quotes
+        return acc + String(v).length;
+      }, 2 + row.values.length * 2); // parentheses + commas
+      if (batch.length > 0 && (batch.length >= maxRowsPerBatch || batchBytes + rowBytes > maxContentLength)) {
+        flush();
+      }
+      batch.push(row);
+      batchBytes += rowBytes;
     }
+    flush();
   }
   return result;
 }
@@ -842,13 +862,29 @@ export function convertToSqlite(mysqlDumpPath: string, sqlitePath: string): void
   const sqliteDdl = generateSqliteDdl();
 
   // Extract INSERT lines from the MySQL dump.
-  // MySQL multi-value INSERT syntax is valid SQLite, but knex uses \' to escape
-  // single quotes while SQLite only accepts ''. Normalise before importing.
+  // MySQL uses backslash escape sequences (\' \n \r \t \\) while SQLite string literals
+  // do not interpret backslash escapes. Normalise all MySQL escape sequences:
+  //   \'  -> ''   (single-quote: MySQL style -> SQLite style)
+  //   \n  -> actual newline   (U+000A)
+  //   \r  -> actual carriage-return (U+000D)
+  //   \t  -> actual tab       (U+0009)
+  //   \0  -> null byte        (U+0000)
+  //   \\  -> single backslash
   const mysqlDump = fs.readFileSync(mysqlDumpPath, 'utf-8');
   const insertLines = mysqlDump
     .split('\n')
     .filter(line => /^insert into/i.test(line.trimStart()))
-    .map(line => line.replace(/\\'/g, "''"));
+    .map(line => line.replace(/\\([nrt0'\\])/g, (_, ch) => {
+      switch (ch) {
+        case "'":  return "''";
+        case 'n':  return '\n';
+        case 'r':  return '\r';
+        case 't':  return '\t';
+        case '0':  return '\0';
+        case '\\': return '\\';
+        default:   return ch; // unreachable given the character class above
+      }
+    }));
 
   const sqliteSql = [
     'PRAGMA synchronous = OFF;',

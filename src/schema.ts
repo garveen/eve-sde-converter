@@ -1200,7 +1200,16 @@ export function generateRedshiftDdl(): string {
       // Skip standalone CREATE INDEX / CREATE UNIQUE INDEX statements (Redshift uses SORTKEY/DISTKEY)
       if (/^create (unique )?index\b/i.test(line)) continue;
       // Replace PostgreSQL SERIAL with Redshift IDENTITY(1,1)
-      const redshiftLine = line.replace(/\bserial\b/gi, 'INTEGER IDENTITY(1,1)');
+      let redshiftLine = line.replace(/\bserial\b/gi, 'INTEGER IDENTITY(1,1)');
+      // Strip inline CHECK constraints: Redshift does not support CHECK constraints.
+      // Knex emits them as ', constraint <name> check (<expr>)' inside CREATE TABLE.
+      // The check condition produced by knex always has at most one level of inner
+      // parentheses (e.g. 'check ("col" in (0,1))'), so we use a non-backtracking
+      // pattern that avoids ReDoS.
+      redshiftLine = redshiftLine.replace(
+        /,\s*constraint\s+\S+\s+check\s*\([^()]*(?:\([^()]*\))?[^()]*\)/gi,
+        '',
+      );
       createLines.push(redshiftLine);
     }
 

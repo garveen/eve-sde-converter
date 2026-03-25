@@ -24,14 +24,35 @@ program
   .description('A pure CLI project for EVE SDE conversion')
   .version('1.0.0');
 
+const ALL_DIALECTS = ['mysql', 'postgres', 'sqlite', 'mssql', 'cockroachdb', 'redshift', 'oracle'] as const;
+type Dialect = typeof ALL_DIALECTS[number];
+
 program.command('convert')
-  .description('Convert EVE SDE from JSONL to MySQL/PgSQL dump and SQLite')
+  .description('Convert EVE SDE from JSONL to SQL dumps and SQLite')
   .option('--local-zip <path>', 'Path to local ZIP file to use instead of downloading')
   .option('--unzipped-dir <path>', 'Path to unzipped directory to use instead of downloading and unzipping')
   .option('--table <tableName>', 'Process only the specified table')
+  .option(
+    '--dialects <list>',
+    `Comma-separated list of dialects to generate (default: all). Available: ${ALL_DIALECTS.join(', ')}`,
+    ALL_DIALECTS.join(','),
+  )
   .action(async (options) => {
     try {
       console.log('Starting EVE SDE conversion...');
+
+      // Parse and validate dialect selection
+      const selectedDialects = new Set<Dialect>(
+        (options.dialects as string)
+          .split(',')
+          .map((d: string) => d.trim().toLowerCase())
+          .filter((d: string): d is Dialect => (ALL_DIALECTS as readonly string[]).includes(d)),
+      );
+      if (selectedDialects.size === 0) {
+        console.error(`No valid dialects specified. Available: ${ALL_DIALECTS.join(', ')}`);
+        process.exit(1);
+      }
+      console.log(`Generating dialects: ${[...selectedDialects].join(', ')}`);
 
       const unzippedDir = options.unzippedDir || path.join(__dirname, '..', 'refs', 'unzipped');
 
@@ -61,54 +82,60 @@ program.command('convert')
         console.log(`Using unzipped directory: ${unzippedDir}`);
       }
 
-      // Generate MySQL dump
-      const mysqlDumpPath = path.join(__dirname, '..', 'output', 'sde.sql');
-
       // Ensure output directory exists
-      const outputDir = path.dirname(mysqlDumpPath);
+      const outputDir = path.join(__dirname, '..', 'output');
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
 
-      console.log('Generating MySQL dump...');
-      generateMySqlDump(unzippedDir, mysqlDumpPath, options.table);
-
-      // Convert to SQLite
-      const sqlitePath = path.join(__dirname, '..', 'output', 'sde.sqlite');
-      if (!fs.existsSync(sqlitePath)) {
-        // create file
-        fs.writeFileSync(sqlitePath, '');
+      // Generate MySQL dump (always required as the source for SQLite conversion)
+      const mysqlDumpPath = path.join(outputDir, 'sde.sql');
+      const needsMysql = selectedDialects.has('mysql') || selectedDialects.has('sqlite');
+      if (needsMysql) {
+        console.log('Generating MySQL dump...');
+        generateMySqlDump(unzippedDir, mysqlDumpPath, options.table);
       }
-      fs.truncateSync(sqlitePath, 0); // Clear existing SQLite file if any
 
-      // Generate PostgreSQL dump directly
-      const pgsqlPath = path.join(__dirname, '..', 'output', 'sde-postgres.sql');
+      // Convert to SQLite (reads from MySQL dump)
+      if (selectedDialects.has('sqlite')) {
+        const sqlitePath = path.join(outputDir, 'sde.sqlite');
+        if (!fs.existsSync(sqlitePath)) {
+          fs.writeFileSync(sqlitePath, '');
+        }
+        fs.truncateSync(sqlitePath, 0);
+        console.log('Converting to SQLite...');
+        convertToSqlite(mysqlDumpPath, sqlitePath);
+      }
 
-      console.log('Generating PostgreSQL dump...');
-      generatePgsqlDump(unzippedDir, pgsqlPath, options.table);
+      if (selectedDialects.has('postgres')) {
+        const pgsqlPath = path.join(outputDir, 'sde-postgres.sql');
+        console.log('Generating PostgreSQL dump...');
+        generatePgsqlDump(unzippedDir, pgsqlPath, options.table);
+      }
 
-      // Generate SQL Server (MSSQL) dump
-      const mssqlPath = path.join(__dirname, '..', 'output', 'sde-mssql.sql');
-      console.log('Generating SQL Server dump...');
-      generateMssqlDump(unzippedDir, mssqlPath, options.table);
+      if (selectedDialects.has('mssql')) {
+        const mssqlPath = path.join(outputDir, 'sde-mssql.sql');
+        console.log('Generating SQL Server dump...');
+        generateMssqlDump(unzippedDir, mssqlPath, options.table);
+      }
 
-      // Generate CockroachDB dump
-      const cockroachPath = path.join(__dirname, '..', 'output', 'sde-cockroachdb.sql');
-      console.log('Generating CockroachDB dump...');
-      generateCockroachDbDump(unzippedDir, cockroachPath, options.table);
+      if (selectedDialects.has('cockroachdb')) {
+        const cockroachPath = path.join(outputDir, 'sde-cockroachdb.sql');
+        console.log('Generating CockroachDB dump...');
+        generateCockroachDbDump(unzippedDir, cockroachPath, options.table);
+      }
 
-      // Generate Amazon Redshift dump
-      const redshiftPath = path.join(__dirname, '..', 'output', 'sde-redshift.sql');
-      console.log('Generating Amazon Redshift dump...');
-      generateRedshiftDump(unzippedDir, redshiftPath, options.table);
+      if (selectedDialects.has('redshift')) {
+        const redshiftPath = path.join(outputDir, 'sde-redshift.sql');
+        console.log('Generating Amazon Redshift dump...');
+        generateRedshiftDump(unzippedDir, redshiftPath, options.table);
+      }
 
-      // Generate Oracle dump
-      const oraclePath = path.join(__dirname, '..', 'output', 'sde-oracle.sql');
-      console.log('Generating Oracle dump...');
-      generateOracleDump(unzippedDir, oraclePath, options.table);
-
-      console.log('Converting to SQLite...');
-      convertToSqlite(mysqlDumpPath, sqlitePath);
+      if (selectedDialects.has('oracle')) {
+        const oraclePath = path.join(outputDir, 'sde-oracle.sql');
+        console.log('Generating Oracle dump...');
+        generateOracleDump(unzippedDir, oraclePath, options.table);
+      }
 
       console.log('Conversion completed successfully!');
     } catch (error) {
