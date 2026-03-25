@@ -1131,10 +1131,32 @@ export function generateOracleDump(
 ): void {
   celestialNameCache = buildNameCache(unzippedDir);
 
-  // Write directly to a file descriptor to avoid RangeError: Invalid string length
-  // when accumulating hundreds of thousands of single-row INSERT statements.
-  const fd = fs.openSync(outputPath, 'w');
-  const writeLine = (line: string) => fs.writeSync(fd, line + '\n');
+  // Write to a temp file first so that a failed run never leaves a partial/corrupt
+  // file at outputPath. Rename into place only after successful completion.
+  const tmpPath = outputPath + '.tmp';
+  const fd = fs.openSync(tmpPath, 'w');
+
+  // Buffer writes up to 64 KB before flushing to reduce per-row syscall overhead.
+  // The flush helper loops until all bytes are written to guard against short writes.
+  const FLUSH_THRESHOLD = 64 * 1024;
+  let buf = '';
+
+  const flush = () => {
+    if (buf.length === 0) return;
+    const data = Buffer.from(buf, 'utf8');
+    let offset = 0;
+    while (offset < data.length) {
+      const written = fs.writeSync(fd, data, offset, data.length - offset);
+      if (written === 0) throw new Error('Oracle dump: fs.writeSync wrote 0 bytes');
+      offset += written;
+    }
+    buf = '';
+  };
+
+  const writeLine = (line: string) => {
+    buf += line + '\n';
+    if (buf.length >= FLUSH_THRESHOLD) flush();
+  };
 
   try {
     writeLine(generateOracleDdl());
@@ -1177,8 +1199,14 @@ export function generateOracleDump(
         console.warn(`Skipping ${currentTableName}: ${e.message}`);
       }
     }
-  } finally {
+
+    flush();
     fs.closeSync(fd);
+    fs.renameSync(tmpPath, outputPath);
+  } catch (e) {
+    try { fs.closeSync(fd); } catch { /* ignore close error during error path */ }
+    try { fs.unlinkSync(tmpPath); } catch { /* ignore cleanup error */ }
+    throw e;
   }
 }
 
