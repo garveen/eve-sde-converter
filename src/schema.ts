@@ -191,13 +191,13 @@ type TableDefineFn = (table: Knex.CreateTableBuilder, isMysql: boolean) => void;
  */
 export const tableDefinitions: Record<string, TableDefineFn> = {
   agtAgentTypes: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('agentTypeID').notNullable().primary();
     table.string('agentType', 50).nullable();
   },
 
   agtAgents: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('agentID').notNullable().primary();
     table.integer('divisionID').nullable();
     table.integer('corporationID').nullable();
@@ -212,7 +212,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   agtAgentsInSpace: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('agentID').notNullable().primary();
     table.integer('dungeonID').nullable();
     table.integer('solarSystemID').nullable();
@@ -222,7 +222,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   agtResearchAgents: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('agentID').notNullable();
     table.integer('typeID').notNullable();
     table.primary(['agentID', 'typeID']);
@@ -230,7 +230,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   certCerts: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('certID').notNullable().primary();
     table.text('description').nullable();
     table.integer('groupID').nullable();
@@ -238,14 +238,14 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   certMasteries: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').nullable();
     table.integer('masteryLevel').nullable();
     table.integer('certID').nullable();
   },
 
   certSkills: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('certID').nullable();
     table.integer('skillID').nullable();
     table.integer('certLevelInt').nullable();
@@ -255,7 +255,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   chrAncestries: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('ancestryID').notNullable().primary();
     table.string('ancestryName', 100).nullable();
     table.integer('bloodlineID').nullable();
@@ -270,7 +270,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   chrAttributes: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('attributeID').notNullable().primary();
     table.string('attributeName', 100).nullable();
     table.string('description', 1000).nullable();
@@ -280,7 +280,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   chrBloodlines: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('bloodlineID').notNullable().primary();
     table.string('bloodlineName', 100).nullable();
     table.integer('raceID').nullable();
@@ -301,7 +301,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   chrFactions: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('factionID').notNullable().primary();
     table.string('factionName', 100).nullable();
     table.string('description', 2000).nullable();
@@ -316,7 +316,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   chrRaces: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('raceID').notNullable().primary();
     table.string('raceName', 100).nullable();
     table.string('description', 1000).nullable();
@@ -325,14 +325,14 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   crpActivities: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('activityID').notNullable().primary();
     table.string('activityName', 100).nullable();
     table.string('description', 1000).nullable();
   },
 
   crpNPCCorporations: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('corporationID').notNullable().primary();
     table.specificType('size', 'char(1)').nullable();
     table.specificType('extent', 'char(1)').nullable();
@@ -365,7 +365,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   crpNPCDivisions: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('divisionID').notNullable().primary();
     table.string('divisionName', 100).nullable();
     table.string('description', 1000).nullable();
@@ -373,14 +373,14 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   dgmAttributeCategories: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('categoryID').notNullable().primary();
     table.string('categoryName', 50).nullable();
     table.string('categoryDescription', 200).nullable();
   },
 
   dgmAttributeTypes: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('attributeID').notNullable().primary();
     table.string('attributeName', 100).nullable();
     table.string('description', 1000).nullable();
@@ -398,7 +398,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   dgmEffects: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('effectID').notNullable().primary();
     table.string('effectName', 400).nullable();
     table.integer('effectCategory').nullable();
@@ -438,7 +438,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   dgmTypeAttributes: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable();
     table.integer('attributeID').notNullable();
     table.integer('valueInt').nullable();
@@ -448,7 +448,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   dgmTypeEffects: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable();
     table.integer('effectID').notNullable();
     table.tinyint('isDefault', 1).nullable();
@@ -457,7 +457,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   eveGraphics: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('graphicID').notNullable().primary();
     table.string('sofFactionName', 100).nullable();
     table.string('graphicFile', 256).nullable();
@@ -467,14 +467,14 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   eveIcons: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('iconID').notNullable().primary();
     table.string('iconFile', 500).nullable();
     table.text('description').nullable();
   },
 
   eveUnits: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('unitID').notNullable().primary();
     table.string('unitName', 100).nullable();
     table.string('displayName', 50).nullable();
@@ -482,7 +482,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   industryActivity: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable();
     table.integer('activityID').notNullable();
     table.integer('time').nullable();
@@ -491,7 +491,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   industryActivityMaterials: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').nullable();
     table.integer('activityID').nullable();
     table.integer('materialTypeID').nullable();
@@ -501,7 +501,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   industryActivityProbabilities: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').nullable();
     table.integer('activityID').nullable();
     table.integer('productTypeID').nullable();
@@ -511,7 +511,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   industryActivityProducts: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').nullable();
     table.integer('activityID').nullable();
     table.integer('productTypeID').nullable();
@@ -521,7 +521,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   industryActivitySkills: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').nullable();
     table.integer('activityID').nullable();
     table.integer('skillID').nullable();
@@ -532,13 +532,13 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   industryBlueprints: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable().primary();
     table.integer('maxProductionLimit').nullable();
   },
 
   invCategories: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('categoryID').notNullable().primary();
     table.string('categoryName', 100).nullable();
     table.integer('iconID').nullable();
@@ -547,7 +547,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invContrabandTypes: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('factionID').notNullable();
     table.integer('typeID').notNullable();
     table.double('standingLoss').nullable();
@@ -559,7 +559,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invControlTowerResources: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('controlTowerTypeID').notNullable();
     table.integer('resourceTypeID').notNullable();
     table.integer('purpose').nullable();
@@ -570,7 +570,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invFlags: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('flagID').notNullable().primary();
     table.string('flagName', 200).nullable();
     table.string('flagText', 100).nullable();
@@ -578,7 +578,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invGroups: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('groupID').notNullable().primary();
     table.integer('categoryID').nullable();
     table.string('groupName', 100).nullable();
@@ -597,7 +597,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invMarketGroups: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('marketGroupID').notNullable().primary();
     table.integer('parentGroupID').nullable();
     table.string('marketGroupName', 100).nullable();
@@ -608,7 +608,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invMetaGroups: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('metaGroupID').notNullable().primary();
     table.string('metaGroupName', 100).nullable();
     table.string('description', 1000).nullable();
@@ -616,20 +616,20 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invMetaTypes: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable().primary();
     table.integer('parentTypeID').nullable();
     table.integer('metaGroupID').nullable();
   },
 
   invNames: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('itemID').notNullable().primary();
     table.string('itemName', 200).notNullable();
   },
 
   invTraits: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.increments('traitID');
     table.integer('typeID').nullable();
     table.integer('skillID').nullable();
@@ -639,7 +639,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invTypeMaterials: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable();
     table.integer('materialTypeID').notNullable();
     table.integer('quantity').notNullable();
@@ -647,7 +647,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invTypes: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable().primary();
     table.integer('groupID').nullable();
     table.string('typeName', 255).nullable();
@@ -668,7 +668,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invUniqueNames: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('itemID').notNullable().primary();
     table.string('itemName', 200).notNullable();
     table.integer('groupID').nullable();
@@ -677,13 +677,13 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   invVolumes: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable().primary();
     table.integer('volume').nullable();
   },
 
   mapCelestialGraphics: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('celestialID').notNullable().primary();
     table.integer('heightMap1').nullable();
     table.integer('heightMap2').nullable();
@@ -693,7 +693,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapCelestialStatistics: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('celestialID').notNullable().primary();
     table.double('temperature').nullable();
     table.string('spectralClass', 10).nullable();
@@ -719,7 +719,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapConstellationJumps: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('fromRegionID').nullable();
     table.integer('fromConstellationID').notNullable();
     table.integer('toConstellationID').notNullable();
@@ -728,7 +728,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapConstellations: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('regionID').nullable();
     table.integer('constellationID').notNullable().primary();
     table.string('constellationName', 100).nullable();
@@ -746,7 +746,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapDenormalize: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('itemID').notNullable().primary();
     table.integer('typeID').nullable();
     table.integer('groupID').nullable();
@@ -773,13 +773,13 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapJumps: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('stargateID').notNullable().primary();
     table.integer('destinationID').nullable();
   },
 
   mapLandmarks: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('landmarkID').notNullable().primary();
     table.string('landmarkName', 100).nullable();
     table.text('description').nullable();
@@ -791,14 +791,14 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapRegionJumps: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('fromRegionID').notNullable();
     table.integer('toRegionID').notNullable();
     table.primary(['fromRegionID', 'toRegionID']);
   },
 
   mapRegions: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('regionID').notNullable().primary();
     table.string('regionName', 100).nullable();
     table.double('x').nullable();
@@ -816,7 +816,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapSolarSystemJumps: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('fromRegionID').nullable();
     table.integer('fromConstellationID').nullable();
     table.integer('fromSolarSystemID').notNullable();
@@ -827,7 +827,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapSolarSystems: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('regionID').nullable();
     table.integer('constellationID').nullable();
     table.integer('solarSystemID').notNullable().primary();
@@ -867,7 +867,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   mapUniverse: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('universeID').notNullable().primary();
     table.string('universeName', 100).nullable();
     table.double('x').nullable();
@@ -883,21 +883,21 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   planetSchematics: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('schematicID').notNullable().primary();
     table.string('schematicName', 255).nullable();
     table.integer('cycleTime').nullable();
   },
 
   planetSchematicsPinMap: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('schematicID').notNullable();
     table.integer('pinTypeID').notNullable();
     table.primary(['schematicID', 'pinTypeID']);
   },
 
   planetSchematicsTypeMap: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('schematicID').notNullable();
     table.integer('typeID').notNullable();
     table.integer('quantity').nullable();
@@ -907,21 +907,21 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   skinLicense: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('licenseTypeID').notNullable().primary();
     table.integer('duration').nullable();
     table.integer('skinID').nullable();
   },
 
   skinMaterials: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('skinMaterialID').notNullable().primary();
     table.integer('displayNameID').nullable();
     table.integer('materialSetID').nullable();
   },
 
   skinShip: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('skinID').nullable();
     table.integer('typeID').nullable();
     table.index(['skinID'], 'ix_skinShip_skinID');
@@ -929,21 +929,21 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   skins: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('skinID').notNullable().primary();
     table.string('internalName', 70).nullable();
     table.integer('skinMaterialID').nullable();
   },
 
   staOperationServices: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('operationID').notNullable();
     table.integer('serviceID').notNullable();
     table.primary(['operationID', 'serviceID']);
   },
 
   staOperations: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('activityID').nullable();
     table.integer('operationID').notNullable().primary();
     table.string('operationName', 100).nullable();
@@ -961,14 +961,14 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   staServices: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('serviceID').notNullable().primary();
     table.string('serviceName', 100).nullable();
     table.string('description', 1000).nullable();
   },
 
   staStations: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.bigInteger('stationID').notNullable().primary();
     table.double('security').nullable();
     table.double('dockingCostPerVolume').nullable();
@@ -996,7 +996,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   translationTables: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.string('sourceTable', 200).notNullable();
     table.string('destinationTable', 200).nullable();
     table.string('translatedKey', 200).notNullable();
@@ -1006,7 +1006,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   trnTranslationColumns: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('tcGroupID').nullable();
     table.integer('tcID').notNullable().primary();
     table.string('tableName', 256).notNullable();
@@ -1015,14 +1015,14 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
   },
 
   trnTranslationLanguages: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('numericLanguageID').notNullable().primary();
     table.string('languageID', 50).nullable();
     table.string('languageName', 200).nullable();
   },
 
   trnTranslations: (table, isMysql) => {
-    if (isMysql) { table.engine('InnoDB'); table.charset('utf8'); }
+    if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('tcID').notNullable();
     table.integer('keyID').notNullable();
     table.string('languageID', 50).notNullable();
@@ -1070,7 +1070,7 @@ function ensureSemicolons(sql: string): string {
 export function generateMysqlDdl(): string {
   const k = knex({ client: 'mysql2' });
   const parts: string[] = [
-    '/*!40101 SET NAMES utf8 */;',
+    '/*!40101 SET NAMES utf8mb4 */;',
     '/*!40014 SET FOREIGN_KEY_CHECKS=0 */;',
     '',
   ];
