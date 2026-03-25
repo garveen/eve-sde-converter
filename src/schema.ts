@@ -347,7 +347,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     table.integer('investorShares4').nullable();
     table.integer('friendID').nullable();
     table.integer('enemyID').nullable();
-    table.integer('publicShares').nullable();
+    table.bigInteger('publicShares').nullable();
     table.integer('initialPrice').nullable();
     table.specificType('minSecurity', 'float').nullable();
     table.tinyint('scattered', 1).nullable();

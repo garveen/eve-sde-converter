@@ -420,7 +420,7 @@ CREATE TABLE `crpNPCCorporations` (
   `investorShares4` int(11) DEFAULT NULL,
   `friendID` int(11) DEFAULT NULL,
   `enemyID` int(11) DEFAULT NULL,
-  `publicShares` int(11) DEFAULT NULL,
+  `publicShares` bigint DEFAULT NULL,
   `initialPrice` int(11) DEFAULT NULL,
   `minSecurity` float DEFAULT NULL,
   `scattered` tinyint(1) DEFAULT NULL,
