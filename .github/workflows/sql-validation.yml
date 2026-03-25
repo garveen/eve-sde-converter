@@ -72,7 +72,9 @@ jobs:
         run: tsx src/index.ts convert
 
       - name: Install sqlite3
-        run: sudo apt-get install -y sqlite3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3
 
       # ── MySQL ────────────────────────────────────────────────────────────────
       - name: Test MySQL
@@ -104,7 +106,7 @@ jobs:
             'until docker exec postgres-test pg_isready -U postgres 2>/dev/null; do sleep 2; done'
 
           docker cp output/sde-postgres.sql postgres-test:/tmp/sde-postgres.sql
-          docker exec postgres-test bash -c "psql -U postgres -d sde -f /tmp/sde-postgres.sql"
+          docker exec postgres-test bash -c "psql -v ON_ERROR_STOP=1 -U postgres -d sde -f /tmp/sde-postgres.sql"
           echo "PostgreSQL: OK"
           docker rm -f postgres-test
 
@@ -129,16 +131,16 @@ jobs:
           echo "Waiting for SQL Server..."
           timeout 120 bash -c \
             'until docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
-              -S localhost -U SA -P "YourStrong!Passw0rd" -C -Q "SELECT 1" 2>/dev/null; \
+              -S localhost -U SA -P "YourStrong!Passw0rd" -C -b -V 16 -Q "SELECT 1" 2>/dev/null; \
             do sleep 3; done'
 
           docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
-            -S localhost -U SA -P 'YourStrong!Passw0rd' -C \
+            -S localhost -U SA -P 'YourStrong!Passw0rd' -C -b -V 16 \
             -Q "CREATE DATABASE sde"
 
           docker cp output/sde-mssql.sql mssql-test:/tmp/sde-mssql.sql
           docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
-            -S localhost -U SA -P 'YourStrong!Passw0rd' -C \
+            -S localhost -U SA -P 'YourStrong!Passw0rd' -C -b -V 16 \
             -d sde -i /tmp/sde-mssql.sql
           echo "SQL Server: OK"
           docker rm -f mssql-test
@@ -177,7 +179,7 @@ jobs:
             'until docker exec redshift-test pg_isready -U postgres 2>/dev/null; do sleep 2; done'
 
           docker cp output/sde-redshift.sql redshift-test:/tmp/sde-redshift.sql
-          docker exec redshift-test bash -c "psql -U postgres -d sde -f /tmp/sde-redshift.sql"
+          docker exec redshift-test bash -c "psql -v ON_ERROR_STOP=1 -U postgres -d sde -f /tmp/sde-redshift.sql"
           echo "Redshift (via PostgreSQL): OK"
           docker rm -f redshift-test
 
@@ -197,6 +199,6 @@ jobs:
 
           docker cp output/sde-oracle.sql oracle-test:/tmp/sde-oracle.sql
           docker exec oracle-test bash -c \
-            '{ cat /tmp/sde-oracle.sql; echo "EXIT;"; } | sqlplus -s sde/Oracle_123@//localhost:1521/FREEPDB1'
+            '{ echo "WHENEVER OSERROR EXIT 1;"; echo "WHENEVER SQLERROR EXIT SQL.SQLCODE;"; cat /tmp/sde-oracle.sql; echo "EXIT;"; } | sqlplus -s sde/Oracle_123@//localhost:1521/FREEPDB1'
           echo "Oracle: OK"
           docker rm -f oracle-test
