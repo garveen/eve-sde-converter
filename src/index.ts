@@ -10,6 +10,10 @@ import {
   generateMySqlDump,
   convertToSqlite,
   generatePgsqlDump,
+  generateMssqlDump,
+  generateCockroachDbDump,
+  generateRedshiftDump,
+  generateOracleDump,
   getChangeSummary
 } from './processor';
 
@@ -82,6 +86,26 @@ program.command('convert')
 
       console.log('Generating PostgreSQL dump...');
       generatePgsqlDump(unzippedDir, pgsqlPath, options.table);
+
+      // Generate SQL Server (MSSQL) dump
+      const mssqlPath = path.join(__dirname, '..', 'output', 'sde-mssql.sql');
+      console.log('Generating SQL Server dump...');
+      generateMssqlDump(unzippedDir, mssqlPath, options.table);
+
+      // Generate CockroachDB dump
+      const cockroachPath = path.join(__dirname, '..', 'output', 'sde-cockroachdb.sql');
+      console.log('Generating CockroachDB dump...');
+      generateCockroachDbDump(unzippedDir, cockroachPath, options.table);
+
+      // Generate Amazon Redshift dump
+      const redshiftPath = path.join(__dirname, '..', 'output', 'sde-redshift.sql');
+      console.log('Generating Amazon Redshift dump...');
+      generateRedshiftDump(unzippedDir, redshiftPath, options.table);
+
+      // Generate Oracle dump
+      const oraclePath = path.join(__dirname, '..', 'output', 'sde-oracle.sql');
+      console.log('Generating Oracle dump...');
+      generateOracleDump(unzippedDir, oraclePath, options.table);
 
       console.log('Converting to SQLite...');
       convertToSqlite(mysqlDumpPath, sqlitePath);

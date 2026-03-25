@@ -7,6 +7,10 @@ import {
   generateMysqlDdl,
   generatePgsqlDdl,
   generateSqliteDdl,
+  generateMssqlDdl,
+  generateCockroachDbDdl,
+  generateRedshiftDdl,
+  generateOracleDdl,
   tableOrder,
   invFlagsData,
   mapUniverseData,
@@ -16,6 +20,8 @@ const AdmZip = require('adm-zip');
 
 const knexMysql = knex({ client: 'mysql2' });
 const knexPg = knex({ client: 'pg' });
+const knexMssql = knex({ client: 'mssql' });
+const knexOracle = knex({ client: 'oracledb', version: '12.0' });
 
 function getProxyAgent() {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
@@ -781,6 +787,9 @@ export function processTable(tableName: string, unzippedDir: string): InsertRow[
   }
 }
 
+/** Tables that contain an auto-increment (IDENTITY) primary key column. */
+const identityTables = new Set(['invTraits']);
+
 /** Tables that have static hard-coded data (not sourced from JSONL files). */
 const staticDataTables = new Set(['invFlags', 'mapUniverse', 'trnTranslationColumns']);
 
@@ -904,6 +913,221 @@ export function generatePgsqlDump(
           const batch = group.slice(i, i + BATCH);
           output.push(knexPg(table).insert(insertRowsToObjects(batch)).toString() + ';');
         }
+      }
+    } catch (e: any) {
+      console.warn(`Skipping ${currentTableName}: ${e.message}`);
+    }
+  }
+
+  fs.writeFileSync(outputPath, output.join('\n'));
+}
+
+/**
+ * Generate SQL Server (MSSQL) dump directly from JSONL data.
+ */
+export function generateMssqlDump(
+  unzippedDir: string,
+  outputPath: string,
+  tableName?: string,
+): void {
+  celestialNameCache = buildNameCache(unzippedDir);
+
+  const output: string[] = [generateMssqlDdl(), '-- Data', ''];
+
+  if (!tableName) {
+    output.push(...getStaticInserts(knexMssql));
+    output.push('');
+  } else if (staticDataTables.has(tableName)) {
+    const k = knexMssql;
+    if (tableName === 'invFlags') output.push(k('invFlags').insert(invFlagsData).toString() + ';');
+    if (tableName === 'mapUniverse') output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';');
+    if (tableName === 'trnTranslationColumns') output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';');
+    output.push('');
+  }
+
+  for (const currentTableName of tableOrder) {
+    if (!tableMappings[currentTableName]) continue;
+    if (tableName && currentTableName !== tableName) continue;
+    try {
+      const rows = processTable(currentTableName, unzippedDir);
+      if (rows.length === 0) continue;
+      const groups = new Map<string, InsertRow[]>();
+      for (const row of rows) {
+        const key = `${row.table}\0${row.columns.join('\0')}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(row);
+      }
+      for (const group of groups.values()) {
+        const { table } = group[0];
+        const BATCH = 500;
+        for (let i = 0; i < group.length; i += BATCH) {
+          const batch = group.slice(i, i + BATCH);
+          // MSSQL requires SET IDENTITY_INSERT ON/OFF when inserting into identity columns
+          if (identityTables.has(table)) {
+            output.push(`SET IDENTITY_INSERT [${table}] ON;`);
+          }
+          output.push(knexMssql(table).insert(insertRowsToObjects(batch)).toString() + ';');
+          if (identityTables.has(table)) {
+            output.push(`SET IDENTITY_INSERT [${table}] OFF;`);
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn(`Skipping ${currentTableName}: ${e.message}`);
+    }
+  }
+
+  fs.writeFileSync(outputPath, output.join('\n'));
+}
+
+/**
+ * Generate CockroachDB dump directly from JSONL data.
+ * CockroachDB is PostgreSQL-wire-compatible; INSERT syntax is identical to PostgreSQL.
+ */
+export function generateCockroachDbDump(
+  unzippedDir: string,
+  outputPath: string,
+  tableName?: string,
+): void {
+  celestialNameCache = buildNameCache(unzippedDir);
+
+  const output: string[] = [generateCockroachDbDdl(), '-- Data', ''];
+
+  if (!tableName) {
+    output.push(...getStaticInserts(knexPg));
+    output.push('');
+  } else if (staticDataTables.has(tableName)) {
+    const k = knexPg;
+    if (tableName === 'invFlags') output.push(k('invFlags').insert(invFlagsData).toString() + ';');
+    if (tableName === 'mapUniverse') output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';');
+    if (tableName === 'trnTranslationColumns') output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';');
+    output.push('');
+  }
+
+  for (const currentTableName of tableOrder) {
+    if (!tableMappings[currentTableName]) continue;
+    if (tableName && currentTableName !== tableName) continue;
+    try {
+      const rows = processTable(currentTableName, unzippedDir);
+      if (rows.length === 0) continue;
+      const groups = new Map<string, InsertRow[]>();
+      for (const row of rows) {
+        const key = `${row.table}\0${row.columns.join('\0')}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(row);
+      }
+      for (const group of groups.values()) {
+        const { table } = group[0];
+        const BATCH = 500;
+        for (let i = 0; i < group.length; i += BATCH) {
+          const batch = group.slice(i, i + BATCH);
+          output.push(knexPg(table).insert(insertRowsToObjects(batch)).toString() + ';');
+        }
+      }
+    } catch (e: any) {
+      console.warn(`Skipping ${currentTableName}: ${e.message}`);
+    }
+  }
+
+  fs.writeFileSync(outputPath, output.join('\n'));
+}
+
+/**
+ * Generate Amazon Redshift dump directly from JSONL data.
+ * Redshift is PostgreSQL-based; INSERT syntax is compatible with PostgreSQL.
+ */
+export function generateRedshiftDump(
+  unzippedDir: string,
+  outputPath: string,
+  tableName?: string,
+): void {
+  celestialNameCache = buildNameCache(unzippedDir);
+
+  const output: string[] = [generateRedshiftDdl(), '-- Data', ''];
+
+  if (!tableName) {
+    output.push(...getStaticInserts(knexPg));
+    output.push('');
+  } else if (staticDataTables.has(tableName)) {
+    const k = knexPg;
+    if (tableName === 'invFlags') output.push(k('invFlags').insert(invFlagsData).toString() + ';');
+    if (tableName === 'mapUniverse') output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';');
+    if (tableName === 'trnTranslationColumns') output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';');
+    output.push('');
+  }
+
+  for (const currentTableName of tableOrder) {
+    if (!tableMappings[currentTableName]) continue;
+    if (tableName && currentTableName !== tableName) continue;
+    try {
+      const rows = processTable(currentTableName, unzippedDir);
+      if (rows.length === 0) continue;
+      const groups = new Map<string, InsertRow[]>();
+      for (const row of rows) {
+        const key = `${row.table}\0${row.columns.join('\0')}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(row);
+      }
+      for (const group of groups.values()) {
+        const { table } = group[0];
+        const BATCH = 500;
+        for (let i = 0; i < group.length; i += BATCH) {
+          const batch = group.slice(i, i + BATCH);
+          output.push(knexPg(table).insert(insertRowsToObjects(batch)).toString() + ';');
+        }
+      }
+    } catch (e: any) {
+      console.warn(`Skipping ${currentTableName}: ${e.message}`);
+    }
+  }
+
+  fs.writeFileSync(outputPath, output.join('\n'));
+}
+
+/**
+ * Generate Oracle dump directly from JSONL data.
+ * Oracle does not support multi-row VALUES; each row is emitted as a separate INSERT statement.
+ */
+export function generateOracleDump(
+  unzippedDir: string,
+  outputPath: string,
+  tableName?: string,
+): void {
+  celestialNameCache = buildNameCache(unzippedDir);
+
+  const output: string[] = [generateOracleDdl(), '-- Data', ''];
+
+  if (!tableName) {
+    // Static data: emit one INSERT per row for Oracle compatibility
+    for (const row of invFlagsData) {
+      output.push(knexOracle('invFlags').insert(row).toString() + ';');
+    }
+    for (const row of mapUniverseData) {
+      output.push(knexOracle('mapUniverse').insert(row).toString() + ';');
+    }
+    for (const row of trnTranslationColumnsData) {
+      output.push(knexOracle('trnTranslationColumns').insert(row).toString() + ';');
+    }
+    output.push('');
+  } else if (staticDataTables.has(tableName)) {
+    const dataset =
+      tableName === 'invFlags' ? invFlagsData :
+      tableName === 'mapUniverse' ? mapUniverseData :
+      trnTranslationColumnsData;
+    for (const row of dataset) {
+      output.push(knexOracle(tableName).insert(row).toString() + ';');
+    }
+    output.push('');
+  }
+
+  for (const currentTableName of tableOrder) {
+    if (!tableMappings[currentTableName]) continue;
+    if (tableName && currentTableName !== tableName) continue;
+    try {
+      const rows = processTable(currentTableName, unzippedDir);
+      if (rows.length === 0) continue;
+      for (const row of insertRowsToObjects(rows)) {
+        output.push(knexOracle(currentTableName).insert(row).toString() + ';');
       }
     } catch (e: any) {
       console.warn(`Skipping ${currentTableName}: ${e.message}`);
