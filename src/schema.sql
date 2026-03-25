@@ -605,7 +605,7 @@ DROP TABLE IF EXISTS `dgmTypeAttributes`;
 CREATE TABLE `dgmTypeAttributes` (
   `typeID` int(11) NOT NULL,
   `attributeID` int(11) NOT NULL,
-  `valueInt` int(11) DEFAULT NULL,
+  `valueInt` bigint DEFAULT NULL,
   `valueFloat` float DEFAULT NULL,
   PRIMARY KEY (`typeID`,`attributeID`),
   KEY `ix_dgmTypeAttributes_attributeID` (`attributeID`)

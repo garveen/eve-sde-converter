@@ -441,7 +441,7 @@ export const tableDefinitions: Record<string, TableDefineFn> = {
     if (isMysql) { table.engine('InnoDB'); table.charset('utf8mb4'); }
     table.integer('typeID').notNullable();
     table.integer('attributeID').notNullable();
-    table.integer('valueInt').nullable();
+    table.bigInteger('valueInt').nullable();
     table.specificType('valueFloat', 'float').nullable();
     table.primary(['typeID', 'attributeID']);
     table.index(['attributeID'], 'ix_dgmTypeAttributes_attributeID');
