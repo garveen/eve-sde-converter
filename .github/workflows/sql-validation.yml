@@ -96,7 +96,7 @@ jobs:
 
           docker cp output/sde-oracle.sql oracle-test:/tmp/sde-oracle.sql
           docker exec oracle-test bash -c \
-            '{ echo "WHENEVER OSERROR EXIT 1;"; echo "WHENEVER SQLERROR EXIT SQL.SQLCODE;"; cat /tmp/sde-oracle.sql; echo "EXIT;"; } | sqlplus -s sde/Oracle_123@//localhost:1521/FREEPDB1'
+            '{ echo "WHENEVER OSERROR EXIT 1;"; echo "WHENEVER SQLERROR EXIT SQL.SQLCODE;"; echo "SET DEFINE OFF;"; cat /tmp/sde-oracle.sql; echo "EXIT;"; } | sqlplus -s sde/Oracle_123@//localhost:1521/FREEPDB1'
           echo "Oracle: OK"
           docker rm -f oracle-test
 
