@@ -124,8 +124,10 @@ jobs:
       - name: Test SQL Server
         run: |
           docker run -d --name mssql-test \
+            --memory=5g --memory-swap=5g \
             -e ACCEPT_EULA=Y \
             -e MSSQL_SA_PASSWORD='YourStrong!Passw0rd' \
+            -e MSSQL_MEMORY_LIMIT_MB=3072 \
             mcr.microsoft.com/mssql/server:2022-latest
 
           echo "Waiting for SQL Server..."
@@ -154,6 +156,9 @@ jobs:
           echo "Created database 'sde' in SQL Server"
 
           docker cp output/sde-mssql.sql mssql-test:/tmp/sde-mssql.sql
+
+          echo "Running SQL Server validation script..."
+
           docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
             -S localhost -U SA -P 'YourStrong!Passw0rd' -C -b -V 16 \
             -d sde -i /tmp/sde-mssql.sql
