@@ -287,18 +287,26 @@ function extractRawValues(
   );
 }
 
-/** Convert InsertRow array to plain key-value objects for knex insert. */
-function insertRowsToObjects(rows: InsertRow[], coerceBoolToInt = false): Record<string, any>[] {
+/** Convert InsertRow array to plain key-value objects for knex insert.
+ * @param decimalColumns - column names that must be emitted as DECIMAL literals
+ *   (used for CockroachDB which refuses to match int and decimal types in VALUES).
+ */
+function insertRowsToObjects(rows: InsertRow[], coerceBoolToInt = false, decimalColumns?: Set<string>): Record<string, any>[] {
   return rows.map(row => {
     const obj: Record<string, any> = {};
     for (let i = 0; i < row.columns.length; i++) {
+      const col = row.columns[i];
       const v = row.values[i];
       if (v === undefined) {
-        obj[row.columns[i]] = null;
+        obj[col] = null;
       } else if (coerceBoolToInt && typeof v === 'boolean') {
-        obj[row.columns[i]] = v ? 1 : 0;
+        obj[col] = v ? 1 : 0;
+      } else if (decimalColumns?.has(col) && typeof v === 'number') {
+        // CockroachDB infers int vs decimal from the literal and refuses mixed
+        // types in a multi-row VALUES.  Force a decimal cast so all rows agree.
+        obj[col] = knexPg.raw('?::decimal', [v]);
       } else {
-        obj[row.columns[i]] = v;
+        obj[col] = v;
       }
     }
     return obj;
@@ -1031,6 +1039,10 @@ export function generateMssqlDump(
  * Generate CockroachDB dump directly from JSONL data.
  * CockroachDB is PostgreSQL-wire-compatible; INSERT syntax is identical to PostgreSQL.
  */
+/** Decimal columns in the schema – CockroachDB won't implicitly cast int→decimal
+ *  within a multi-row VALUES list, so we emit an explicit ::decimal cast. */
+const CRDB_DECIMAL_COLUMNS = new Set(['probability', 'basePrice']);
+
 export function generateCockroachDbDump(
   unzippedDir: string,
   outputPath: string,
@@ -1068,7 +1080,7 @@ export function generateCockroachDbDump(
         const BATCH = 500;
         for (let i = 0; i < group.length; i += BATCH) {
           const batch = group.slice(i, i + BATCH);
-          output.push(knexPg(table).insert(insertRowsToObjects(batch)).toString() + ';');
+          output.push(knexPg(table).insert(insertRowsToObjects(batch, false, CRDB_DECIMAL_COLUMNS)).toString() + ';');
         }
       }
     } catch (e: any) {
