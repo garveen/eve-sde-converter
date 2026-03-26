@@ -152,7 +152,7 @@ jobs:
 
           docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
             -S localhost -U SA -P 'YourStrong!Passw0rd' -C -b -V 16 \
-            -Q "CREATE DATABASE sde"
+            -Q "CREATE DATABASE sde COLLATE Latin1_General_100_CI_AS_SC"
           echo "Created database 'sde' in SQL Server"
 
           docker cp output/sde-mssql.sql mssql-test:/tmp/sde-mssql.sql

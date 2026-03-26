@@ -382,11 +382,12 @@ export function processTable(tableName: string, unzippedDir: string): InsertRow[
         }
       }
     }
-    // Now deduplicate by itemName (case-insensitive, matching MySQL utf8_general_ci),
-    // keeping the one with smallest groupID
+    // Now deduplicate by itemName (case-insensitive, NFC-normalised).
+    // NFC normalisation ensures composed/decomposed Unicode forms are treated
+    // as equal, matching SQL Server's CI_AS_SC collation behaviour.
     const uniqueByName = new Map<string, {itemID: number, itemName: string, groupID: number}>();
     for (const entry of uniqueByID.values()) {
-      const nameKey = entry.itemName.toLowerCase();
+      const nameKey = entry.itemName.normalize('NFC').toLowerCase();
       if (uniqueByName.has(nameKey)) {
         const existing = uniqueByName.get(nameKey)!;
         if (entry.groupID < existing.groupID) {
