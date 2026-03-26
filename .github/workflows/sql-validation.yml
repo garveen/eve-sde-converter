@@ -146,10 +146,12 @@ jobs:
             echo "Attempt $i: not ready yet, retrying in 2s..."
             sleep 2
           done
+          docker logs -n 100 mssql-test
 
           docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
             -S localhost -U SA -P 'YourStrong!Passw0rd' -C -b -V 16 \
             -Q "CREATE DATABASE sde"
+          echo "Created database 'sde' in SQL Server"
 
           docker cp output/sde-mssql.sql mssql-test:/tmp/sde-mssql.sql
           docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
