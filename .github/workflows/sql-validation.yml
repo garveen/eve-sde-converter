@@ -169,44 +169,6 @@ jobs:
           echo "SQL Server: OK"
           docker rm -f mssql-test
 
-      # ── CockroachDB ──────────────────────────────────────────────────────────
-      - name: Test CockroachDB
-        run: |
-          docker run -d --name cockroach-test \
-            cockroachdb/cockroach:latest \
-            start-single-node --insecure
-
-          echo "Waiting for CockroachDB..."
-          timeout 120 bash -c \
-            'until docker exec cockroach-test ./cockroach sql --insecure -e "SELECT 1" 2>/dev/null; \
-            do sleep 2; done'
-
-          docker exec cockroach-test ./cockroach sql --insecure -e "CREATE DATABASE sde"
-          docker cp output/sde-cockroachdb.sql cockroach-test:/tmp/sde-cockroachdb.sql
-          docker exec cockroach-test ./cockroach sql --insecure -d sde \
-            -f /tmp/sde-cockroachdb.sql
-          echo "CockroachDB: OK"
-          docker rm -f cockroach-test
-
-      # ── Amazon Redshift (tested via PostgreSQL) ──────────────────────────────
-      # Redshift has no official local Docker image; its SQL dialect is
-      # PostgreSQL-compatible, so we validate against a PostgreSQL container.
-      - name: Test Redshift (via PostgreSQL)
-        run: |
-          docker run -d --name redshift-test \
-            -e POSTGRES_PASSWORD=postgres \
-            -e POSTGRES_DB=sde \
-            postgres:16
-
-          echo "Waiting for PostgreSQL (Redshift proxy)..."
-          timeout 60 bash -c \
-            'until docker exec redshift-test pg_isready -U postgres 2>/dev/null; do sleep 2; done'
-
-          docker cp output/sde-redshift.sql redshift-test:/tmp/sde-redshift.sql
-          docker exec redshift-test bash -c "psql -v ON_ERROR_STOP=1 -U postgres -d sde -f /tmp/sde-redshift.sql"
-          echo "Redshift (via PostgreSQL): OK"
-          docker rm -f redshift-test
-
       # ── Oracle ───────────────────────────────────────────────────────────────
       - name: Test Oracle
         run: |

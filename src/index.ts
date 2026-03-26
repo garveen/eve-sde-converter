@@ -11,8 +11,6 @@ import {
   convertToSqlite,
   generatePgsqlDump,
   generateMssqlDump,
-  generateCockroachDbDump,
-  generateRedshiftDump,
   generateOracleDump,
   getChangeSummary
 } from './processor';
@@ -24,7 +22,7 @@ program
   .description('A pure CLI project for EVE SDE conversion')
   .version('1.0.0');
 
-const ALL_DIALECTS = ['mysql', 'postgres', 'sqlite', 'mssql', 'cockroachdb', 'redshift', 'oracle'] as const;
+const ALL_DIALECTS = ['mysql', 'postgres', 'sqlite', 'mssql', 'oracle'] as const;
 type Dialect = typeof ALL_DIALECTS[number];
 
 program.command('convert')
@@ -117,18 +115,6 @@ program.command('convert')
         const mssqlPath = path.join(outputDir, 'sde-mssql.sql');
         console.log('Generating SQL Server dump...');
         generateMssqlDump(unzippedDir, mssqlPath, options.table);
-      }
-
-      if (selectedDialects.has('cockroachdb')) {
-        const cockroachPath = path.join(outputDir, 'sde-cockroachdb.sql');
-        console.log('Generating CockroachDB dump...');
-        generateCockroachDbDump(unzippedDir, cockroachPath, options.table);
-      }
-
-      if (selectedDialects.has('redshift')) {
-        const redshiftPath = path.join(outputDir, 'sde-redshift.sql');
-        console.log('Generating Amazon Redshift dump...');
-        generateRedshiftDump(unzippedDir, redshiftPath, options.table);
       }
 
       if (selectedDialects.has('oracle')) {

@@ -8,8 +8,6 @@ import {
   generatePgsqlDdl,
   generateSqliteDdl,
   generateMssqlDdl,
-  generateCockroachDbDdl,
-  generateRedshiftDdl,
   generateOracleDdl,
   tableOrder,
   invFlagsData,
@@ -287,11 +285,8 @@ function extractRawValues(
   );
 }
 
-/** Convert InsertRow array to plain key-value objects for knex insert.
- * @param decimalColumns - column names that must be emitted as DECIMAL literals
- *   (used for CockroachDB which refuses to match int and decimal types in VALUES).
- */
-function insertRowsToObjects(rows: InsertRow[], coerceBoolToInt = false, decimalColumns?: Set<string>): Record<string, any>[] {
+/** Convert InsertRow array to plain key-value objects for knex insert. */
+function insertRowsToObjects(rows: InsertRow[], coerceBoolToInt = false): Record<string, any>[] {
   return rows.map(row => {
     const obj: Record<string, any> = {};
     for (let i = 0; i < row.columns.length; i++) {
@@ -301,10 +296,6 @@ function insertRowsToObjects(rows: InsertRow[], coerceBoolToInt = false, decimal
         obj[col] = null;
       } else if (coerceBoolToInt && typeof v === 'boolean') {
         obj[col] = v ? 1 : 0;
-      } else if (decimalColumns?.has(col) && typeof v === 'number') {
-        // CockroachDB infers int vs decimal from the literal and refuses mixed
-        // types in a multi-row VALUES.  Force a decimal cast so all rows agree.
-        obj[col] = knexPg.raw('?::decimal', [v]);
       } else {
         obj[col] = v;
       }
@@ -1025,114 +1016,6 @@ export function generateMssqlDump(
             output.push(`SET IDENTITY_INSERT [${table}] OFF;`);
           }
           output.push('GO');
-        }
-      }
-    } catch (e: any) {
-      console.warn(`Skipping ${currentTableName}: ${e.message}`);
-    }
-  }
-
-  fs.writeFileSync(outputPath, output.join('\n'));
-}
-
-/**
- * Generate CockroachDB dump directly from JSONL data.
- * CockroachDB is PostgreSQL-wire-compatible; INSERT syntax is identical to PostgreSQL.
- */
-/** Decimal columns in the schema – CockroachDB won't implicitly cast int→decimal
- *  within a multi-row VALUES list, so we emit an explicit ::decimal cast. */
-const CRDB_DECIMAL_COLUMNS = new Set(['probability', 'basePrice']);
-
-export function generateCockroachDbDump(
-  unzippedDir: string,
-  outputPath: string,
-  tableName?: string,
-): void {
-  celestialNameCache = buildNameCache(unzippedDir);
-
-  const output: string[] = [generateCockroachDbDdl(), '-- Data', ''];
-
-  if (!tableName) {
-    output.push(...getStaticInserts(knexPg));
-    output.push('');
-  } else if (staticDataTables.has(tableName)) {
-    const k = knexPg;
-    if (tableName === 'invFlags') output.push(k('invFlags').insert(invFlagsData).toString() + ';');
-    if (tableName === 'mapUniverse') output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';');
-    if (tableName === 'trnTranslationColumns') output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';');
-    output.push('');
-  }
-
-  for (const currentTableName of tableOrder) {
-    if (!tableMappings[currentTableName]) continue;
-    if (tableName && currentTableName !== tableName) continue;
-    try {
-      const rows = processTable(currentTableName, unzippedDir);
-      if (rows.length === 0) continue;
-      const groups = new Map<string, InsertRow[]>();
-      for (const row of rows) {
-        const key = `${row.table}\0${row.columns.join('\0')}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(row);
-      }
-      for (const group of groups.values()) {
-        const { table } = group[0];
-        const BATCH = 500;
-        for (let i = 0; i < group.length; i += BATCH) {
-          const batch = group.slice(i, i + BATCH);
-          output.push(knexPg(table).insert(insertRowsToObjects(batch, false, CRDB_DECIMAL_COLUMNS)).toString() + ';');
-        }
-      }
-    } catch (e: any) {
-      console.warn(`Skipping ${currentTableName}: ${e.message}`);
-    }
-  }
-
-  fs.writeFileSync(outputPath, output.join('\n'));
-}
-
-/**
- * Generate Amazon Redshift dump directly from JSONL data.
- * Redshift is PostgreSQL-based; INSERT syntax is compatible with PostgreSQL.
- */
-export function generateRedshiftDump(
-  unzippedDir: string,
-  outputPath: string,
-  tableName?: string,
-): void {
-  celestialNameCache = buildNameCache(unzippedDir);
-
-  const output: string[] = [generateRedshiftDdl(), '-- Data', ''];
-
-  if (!tableName) {
-    output.push(...getStaticInserts(knexPg));
-    output.push('');
-  } else if (staticDataTables.has(tableName)) {
-    const k = knexPg;
-    if (tableName === 'invFlags') output.push(k('invFlags').insert(invFlagsData).toString() + ';');
-    if (tableName === 'mapUniverse') output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';');
-    if (tableName === 'trnTranslationColumns') output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';');
-    output.push('');
-  }
-
-  for (const currentTableName of tableOrder) {
-    if (!tableMappings[currentTableName]) continue;
-    if (tableName && currentTableName !== tableName) continue;
-    try {
-      const rows = processTable(currentTableName, unzippedDir);
-      if (rows.length === 0) continue;
-      const groups = new Map<string, InsertRow[]>();
-      for (const row of rows) {
-        const key = `${row.table}\0${row.columns.join('\0')}`;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(row);
-      }
-      for (const group of groups.values()) {
-        const { table } = group[0];
-        const BATCH = 500;
-        for (let i = 0; i < group.length; i += BATCH) {
-          const batch = group.slice(i, i + BATCH);
-          output.push(knexPg(table).insert(insertRowsToObjects(batch)).toString() + ';');
         }
       }
     } catch (e: any) {

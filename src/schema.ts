@@ -1158,75 +1158,7 @@ export function generateMssqlDdl(): string {
   return parts.join('\n');
 }
 
-/** Generate DROP + CREATE TABLE DDL for all tables using the CockroachDB dialect.
- *  CockroachDB is PostgreSQL-wire-compatible; the pg knex dialect produces valid CockroachDB DDL. */
-export function generateCockroachDbDdl(): string {
-  const k = knex({ client: 'pg' });
-  const parts: string[] = [
-    '-- CockroachDB DDL (PostgreSQL-compatible)',
-    "SET client_encoding = 'UTF8';",
-    '',
-  ];
-  for (const name of tableOrder) {
-    const fn = tableDefinitions[name];
-    const dropSql = k.schema.dropTableIfExists(name).toString()
-      .replace(/drop table if exists/i, 'DROP TABLE IF EXISTS')
-      .replace(/;?\s*$/, ' CASCADE;');
-    const createSql = k.schema
-      .createTable(name, (table) => fn(table, false))
-      .toString();
-    parts.push(ensureSemicolons(dropSql));
-    parts.push(ensureSemicolons(createSql));
-    parts.push('');
-  }
-  return parts.join('\n');
-}
 
-/** Generate DROP + CREATE TABLE DDL for all tables targeting Amazon Redshift.
- *  Redshift is based on PostgreSQL 8 and does not support SERIAL, traditional indexes,
- *  or CHECK constraints; we post-process the PG output accordingly. */
-export function generateRedshiftDdl(): string {
-  const k = knex({ client: 'pg' });
-  const parts: string[] = [
-    '-- Amazon Redshift DDL',
-    "SET client_encoding = 'UTF8';",
-    '',
-  ];
-  for (const name of tableOrder) {
-    const fn = tableDefinitions[name];
-    const dropSql = k.schema.dropTableIfExists(name).toString()
-      .replace(/drop table if exists/i, 'DROP TABLE IF EXISTS')
-      .replace(/;?\s*$/, ' CASCADE;');
-    const rawCreate = k.schema
-      .createTable(name, (table) => fn(table, false))
-      .toString();
-
-    // Redshift-specific post-processing applied line by line:
-    const createLines: string[] = [];
-    for (const rawLine of rawCreate.split('\n')) {
-      const line = rawLine.trimEnd();
-      // Skip standalone CREATE INDEX / CREATE UNIQUE INDEX statements (Redshift uses SORTKEY/DISTKEY)
-      if (/^create (unique )?index\b/i.test(line)) continue;
-      // Replace PostgreSQL SERIAL with Redshift IDENTITY(1,1)
-      let redshiftLine = line.replace(/\bserial\b/gi, 'INTEGER IDENTITY(1,1)');
-      // Strip inline CHECK constraints: Redshift does not support CHECK constraints.
-      // Knex emits them as ', constraint <name> check (<expr>)' inside CREATE TABLE.
-      // The check condition produced by knex always has at most one level of inner
-      // parentheses (e.g. 'check ("col" in (0,1))'), so we use a non-backtracking
-      // pattern that avoids ReDoS.
-      redshiftLine = redshiftLine.replace(
-        /,\s*constraint\s+\S+\s+check\s*\([^()]*(?:\([^()]*\))?[^()]*\)/gi,
-        '',
-      );
-      createLines.push(redshiftLine);
-    }
-
-    parts.push(ensureSemicolons(dropSql));
-    parts.push(ensureSemicolons(createLines.join('\n')));
-    parts.push('');
-  }
-  return parts.join('\n');
-}
 
 /** Generate DROP + CREATE TABLE DDL for all tables using the Oracle dialect.
  *  Uses Oracle 12c syntax (sequence + trigger for auto-increment).
