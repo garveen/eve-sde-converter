@@ -87,7 +87,7 @@ jobs:
 
           echo "Waiting for Oracle (this may take several minutes)..."
           timeout 300 bash -c \
-            'until docker exec oracle-test sqlplus -s sde/Oracle_123@//localhost:1521/FREEPDB1 <<< "EXIT;" 2>/dev/null | grep -q "Connected"; \
+            'until docker logs oracle-test 2>&1 | grep -q "DATABASE IS READY TO USE"; \
             do sleep 5; done' || {
               echo "Oracle validation failed. Last 100 lines of logs:"
               docker logs -n 100 oracle-test
