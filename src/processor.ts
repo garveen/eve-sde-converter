@@ -288,12 +288,18 @@ function extractRawValues(
 }
 
 /** Convert InsertRow array to plain key-value objects for knex insert. */
-function insertRowsToObjects(rows: InsertRow[]): Record<string, any>[] {
+function insertRowsToObjects(rows: InsertRow[], coerceBoolToInt = false): Record<string, any>[] {
   return rows.map(row => {
     const obj: Record<string, any> = {};
     for (let i = 0; i < row.columns.length; i++) {
       const v = row.values[i];
-      obj[row.columns[i]] = v === undefined ? null : v;
+      if (v === undefined) {
+        obj[row.columns[i]] = null;
+      } else if (coerceBoolToInt && typeof v === 'boolean') {
+        obj[row.columns[i]] = v ? 1 : 0;
+      } else {
+        obj[row.columns[i]] = v;
+      }
     }
     return obj;
   });
@@ -1005,7 +1011,7 @@ export function generateMssqlDump(
           if (identityTables.has(table)) {
             output.push(`SET IDENTITY_INSERT [${table}] ON;`);
           }
-          output.push(knexMssql(table).insert(insertRowsToObjects(batch)).toString() + ';');
+          output.push(knexMssql(table).insert(insertRowsToObjects(batch, true)).toString() + ';');
           if (identityTables.has(table)) {
             output.push(`SET IDENTITY_INSERT [${table}] OFF;`);
           }
