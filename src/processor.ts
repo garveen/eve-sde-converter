@@ -971,13 +971,16 @@ export function generateMssqlDump(
   const output: string[] = [generateMssqlDdl(), '-- Data', ''];
 
   if (!tableName) {
-    output.push(...getStaticInserts(knexMssql));
+    for (const insert of getStaticInserts(knexMssql)) {
+      output.push(insert);
+      output.push('GO');
+    }
     output.push('');
   } else if (staticDataTables.has(tableName)) {
     const k = knexMssql;
-    if (tableName === 'invFlags') output.push(k('invFlags').insert(invFlagsData).toString() + ';');
-    if (tableName === 'mapUniverse') output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';');
-    if (tableName === 'trnTranslationColumns') output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';');
+    if (tableName === 'invFlags') { output.push(k('invFlags').insert(invFlagsData).toString() + ';'); output.push('GO'); }
+    if (tableName === 'mapUniverse') { output.push(k('mapUniverse').insert(mapUniverseData).toString() + ';'); output.push('GO'); }
+    if (tableName === 'trnTranslationColumns') { output.push(k('trnTranslationColumns').insert(trnTranslationColumnsData).toString() + ';'); output.push('GO'); }
     output.push('');
   }
 
@@ -1006,6 +1009,7 @@ export function generateMssqlDump(
           if (identityTables.has(table)) {
             output.push(`SET IDENTITY_INSERT [${table}] OFF;`);
           }
+          output.push('GO');
         }
       }
     } catch (e: any) {
