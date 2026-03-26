@@ -128,14 +128,24 @@ jobs:
             -e MSSQL_SA_PASSWORD='YourStrong!Passw0rd' \
             mcr.microsoft.com/mssql/server:2022-latest
 
-          # Gate on the definitive "SQL Server is now ready" message in the
-          # container log rather than attempting TCP connections. SQL Server
-          # can accept connections and answer SELECT 1 before system-database
-          # recovery is complete, leading to ECONNRESET (0x68) on the next
-          # command. The log message is written only after full initialisation.
           echo "Waiting for SQL Server..."
           timeout 120 bash -c \
             'until docker logs mssql-test 2>&1 | grep -q "SQL Server is now ready"; do sleep 3; done'
+
+          # The "SQL Server is now ready" log message can still precede full
+          # TCP stability on slower CI runners. Retry sqlcmd until it succeeds
+          # to ensure the server is truly accepting connections before proceeding.
+          echo "Verifying SQL Server connectivity..."
+          for i in $(seq 1 30); do
+            if docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
+              -S localhost -U SA -P 'YourStrong!Passw0rd' -C \
+              -Q "SELECT 1" > /dev/null 2>&1; then
+              echo "SQL Server is accepting connections"
+              break
+            fi
+            echo "Attempt $i: not ready yet, retrying in 2s..."
+            sleep 2
+          done
 
           docker exec mssql-test /opt/mssql-tools18/bin/sqlcmd \
             -S localhost -U SA -P 'YourStrong!Passw0rd' -C -b -V 16 \
