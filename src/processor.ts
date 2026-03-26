@@ -1026,6 +1026,101 @@ export function generateMssqlDump(
   fs.writeFileSync(outputPath, output.join('\n'));
 }
 
+// ---------------------------------------------------------------------------
+// Oracle INSERT helpers
+// ---------------------------------------------------------------------------
+
+/** Maximum char length per Oracle string literal in SQL context (< 4000). */
+const ORACLE_CHUNK_SIZE = 3900;
+/** SQL*Plus hard line-length limit is 4999; stay safely under it. */
+const ORACLE_MAX_LINE = 4900;
+
+/**
+ * Break a JavaScript string value into Oracle SQL expression fragments.
+ * Newlines become CHR(10)/CHR(13) expressions; long chunks are split so
+ * each quoted literal fits within ORACLE_CHUNK_SIZE.
+ * The fragments are intended to be joined with ' || '.
+ */
+function oracleStringFragments(s: string): string[] {
+  const fragments: string[] = [];
+  // Split on any CR/LF sequences (capturing them so we can emit CHR calls).
+  const parts = s.split(/([\r\n]+)/);
+  for (const part of parts) {
+    if (part === '') continue;
+    if (/^[\r\n]+$/.test(part)) {
+      for (const ch of part) {
+        if (ch === '\r') fragments.push('CHR(13)');
+        else fragments.push('CHR(10)');
+      }
+    } else {
+      const escaped = part.replace(/'/g, "''");
+      for (let i = 0; i < escaped.length; i += ORACLE_CHUNK_SIZE) {
+        fragments.push(`'${escaped.slice(i, i + ORACLE_CHUNK_SIZE)}'`);
+      }
+    }
+  }
+  return fragments.length === 0 ? ["''"] : fragments;
+}
+
+/** Convert a single row value to its Oracle SQL expression fragment(s). */
+function oracleValueFragments(v: unknown): string[] {
+  if (v === null || v === undefined) return ['NULL'];
+  if (typeof v === 'boolean') return [v ? '1' : '0'];
+  if (typeof v === 'number') return [String(v)];
+  if (typeof v === 'string') return oracleStringFragments(v);
+  return [`'${String(v).replace(/'/g, "''")}'`];
+}
+
+/**
+ * Build a single Oracle INSERT statement for one row.
+ * Lines are wrapped before exceeding ORACLE_MAX_LINE characters so that
+ * SQL*Plus (which rejects lines > 4999 chars) can execute the file.
+ * All embedded newlines in string data are replaced with CHR() expressions
+ * so no physical newline in the output file is part of a string literal.
+ */
+function buildOracleInsert(tableName: string, row: Record<string, any>): string {
+  const cols = Object.keys(row);
+  const header = `insert into "${tableName}" (${cols.map(c => `"${c}"`).join(', ')}) values (`;
+
+  let output = '';
+  let lineLen = 0;
+
+  const emit = (text: string) => {
+    output += text;
+    lineLen += text.length;
+  };
+
+  // Append `text`, breaking to a new line first if adding it would exceed the
+  // per-line limit.  The new line inherits no leading padding so that SQL*Plus
+  // sees a valid continuation (operators / commas may start a line in Oracle SQL).
+  const appendWithWrap = (text: string) => {
+    if (lineLen > 0 && lineLen + text.length > ORACLE_MAX_LINE) {
+      output += '\n';
+      lineLen = 0;
+    }
+    emit(text);
+  };
+
+  emit(header);
+
+  for (let i = 0; i < cols.length; i++) {
+    const frags = oracleValueFragments(row[cols[i]]);
+    for (let j = 0; j < frags.length; j++) {
+      const frag = frags[j];
+      if (i === 0 && j === 0) {
+        appendWithWrap(frag);
+      } else if (j === 0) {
+        appendWithWrap(', ' + frag);
+      } else {
+        appendWithWrap(' || ' + frag);
+      }
+    }
+  }
+
+  appendWithWrap(');');
+  return output;
+}
+
 /**
  * Generate Oracle dump directly from JSONL data.
  * Oracle does not support multi-row VALUES; each row is emitted as a separate INSERT statement.
@@ -1072,13 +1167,13 @@ export function generateOracleDump(
     if (!tableName) {
       // Static data: emit one INSERT per row for Oracle compatibility
       for (const row of invFlagsData) {
-        writeLine(knexOracle('invFlags').insert(row).toString() + ';');
+        writeLine(buildOracleInsert('invFlags', row));
       }
       for (const row of mapUniverseData) {
-        writeLine(knexOracle('mapUniverse').insert(row).toString() + ';');
+        writeLine(buildOracleInsert('mapUniverse', row));
       }
       for (const row of trnTranslationColumnsData) {
-        writeLine(knexOracle('trnTranslationColumns').insert(row).toString() + ';');
+        writeLine(buildOracleInsert('trnTranslationColumns', row));
       }
       writeLine('');
     } else if (staticDataTables.has(tableName)) {
@@ -1087,7 +1182,7 @@ export function generateOracleDump(
         tableName === 'mapUniverse' ? mapUniverseData :
         trnTranslationColumnsData;
       for (const row of dataset) {
-        writeLine(knexOracle(tableName).insert(row).toString() + ';');
+        writeLine(buildOracleInsert(tableName, row));
       }
       writeLine('');
     }
@@ -1099,7 +1194,7 @@ export function generateOracleDump(
         const rows = processTable(currentTableName, unzippedDir);
         if (rows.length === 0) continue;
         for (const row of insertRowsToObjects(rows)) {
-          writeLine(knexOracle(currentTableName).insert(row).toString() + ';');
+          writeLine(buildOracleInsert(currentTableName, row));
         }
       } catch (e: any) {
         console.warn(`Skipping ${currentTableName}: ${e.message}`);
