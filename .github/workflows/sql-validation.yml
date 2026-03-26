@@ -75,6 +75,30 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y sqlite3
+          
+      # ── Oracle ───────────────────────────────────────────────────────────────
+      - name: Test Oracle
+        run: |
+          docker run -d --name oracle-test \
+            -e ORACLE_PASSWORD=Oracle_123 \
+            -e APP_USER=sde \
+            -e APP_USER_PASSWORD=Oracle_123 \
+            gvenzl/oracle-free:slim
+
+          echo "Waiting for Oracle (this may take several minutes)..."
+          timeout 300 bash -c \
+            'until [ "$(docker inspect --format="{{.State.Health.Status}}" oracle-test 2>/dev/null)" = "healthy" ]; \
+            do sleep 5; done' || {
+              echo "Oracle validation failed. Last 100 lines of logs:"
+              docker logs -n 100 oracle-test
+              exit 1
+            }
+
+          docker cp output/sde-oracle.sql oracle-test:/tmp/sde-oracle.sql
+          docker exec oracle-test bash -c \
+            '{ echo "WHENEVER OSERROR EXIT 1;"; echo "WHENEVER SQLERROR EXIT SQL.SQLCODE;"; cat /tmp/sde-oracle.sql; echo "EXIT;"; } | sqlplus -s sde/Oracle_123@//localhost:1521/FREEPDB1'
+          echo "Oracle: OK"
+          docker rm -f oracle-test
 
       # ── MySQL ────────────────────────────────────────────────────────────────
       - name: Test MySQL
@@ -168,23 +192,3 @@ jobs:
             }
           echo "SQL Server: OK"
           docker rm -f mssql-test
-
-      # ── Oracle ───────────────────────────────────────────────────────────────
-      - name: Test Oracle
-        run: |
-          docker run -d --name oracle-test \
-            -e ORACLE_PASSWORD=Oracle_123 \
-            -e APP_USER=sde \
-            -e APP_USER_PASSWORD=Oracle_123 \
-            gvenzl/oracle-free:slim
-
-          echo "Waiting for Oracle (this may take several minutes)..."
-          timeout 300 bash -c \
-            'until [ "$(docker inspect --format="{{.State.Health.Status}}" oracle-test 2>/dev/null)" = "healthy" ]; \
-            do sleep 5; done'
-
-          docker cp output/sde-oracle.sql oracle-test:/tmp/sde-oracle.sql
-          docker exec oracle-test bash -c \
-            '{ echo "WHENEVER OSERROR EXIT 1;"; echo "WHENEVER SQLERROR EXIT SQL.SQLCODE;"; cat /tmp/sde-oracle.sql; echo "EXIT;"; } | sqlplus -s sde/Oracle_123@//localhost:1521/FREEPDB1'
-          echo "Oracle: OK"
-          docker rm -f oracle-test
