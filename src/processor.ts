@@ -868,26 +868,32 @@ export function convertToSqlite(mysqlDumpPath: string, sqlitePath: string): void
   const sqliteDdl = generateSqliteDdl();
 
   // Extract INSERT lines from the MySQL dump.
-  // MySQL uses backslash escape sequences (\' \n \r \t \\) while SQLite string literals
+  // MySQL uses backslash escape sequences while SQLite string literals
   // do not interpret backslash escapes. Normalise all MySQL escape sequences:
   //   \'  -> ''   (single-quote: MySQL style -> SQLite style)
+  //   \"  -> "    (double-quote: unnecessary in SQLite single-quoted strings)
   //   \n  -> actual newline   (U+000A)
   //   \r  -> actual carriage-return (U+000D)
   //   \t  -> actual tab       (U+0009)
   //   \0  -> null byte        (U+0000)
   //   \\  -> single backslash
+  //   \b  -> backspace        (U+0008)
+  //   \Z  -> removed          (Ctrl-Z / EOF marker, not valid in SQLite)
   const mysqlDump = fs.readFileSync(mysqlDumpPath, 'utf-8');
   const insertLines = mysqlDump
     .split('\n')
     .filter(line => /^insert into/i.test(line.trimStart()))
-    .map(line => line.replace(/\\([nrt0'\\])/g, (_, ch) => {
+    .map(line => line.replace(/\\([nrt0'"\\bZ])/g, (_, ch) => {
       switch (ch) {
         case "'":  return "''";
+        case '"':  return '"';
         case 'n':  return '\n';
         case 'r':  return '\r';
         case 't':  return '\t';
         case '0':  return '\0';
         case '\\': return '\\';
+        case 'b':  return '\b';
+        case 'Z':  return '';
         default:   return ch; // unreachable given the character class above
       }
     }));
