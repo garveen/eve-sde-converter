@@ -562,7 +562,7 @@ export function processTable(tableName: string, unzippedDir: string): InsertRow[
       const filePath = path.join(unzippedDir, fileName);
       if (!fs.existsSync(filePath)) continue;
       for (const item of readJsonl(filePath)) {
-        const typeID = item.blueprintTypeID;
+        const typeID = item._key;
         if (!item.activities) continue;
         for (const [actName, actData] of Object.entries(item.activities) as [string, any][]) {
           const activityID = activityIdMap[actName];
@@ -582,7 +582,7 @@ export function processTable(tableName: string, unzippedDir: string): InsertRow[
       const filePath = path.join(unzippedDir, fileName);
       if (!fs.existsSync(filePath)) continue;
       for (const item of readJsonl(filePath)) {
-        const typeID = item.blueprintTypeID;
+        const typeID = item._key;
         if (!item.activities) continue;
         for (const [actName, actData] of Object.entries(item.activities) as [string, any][]) {
           const activityID = activityIdMap[actName];
@@ -604,7 +604,7 @@ export function processTable(tableName: string, unzippedDir: string): InsertRow[
       const filePath = path.join(unzippedDir, fileName);
       if (!fs.existsSync(filePath)) continue;
       for (const item of readJsonl(filePath)) {
-        const typeID = item.blueprintTypeID;
+        const typeID = item._key;
         if (!item.activities) continue;
         for (const [actName, actData] of Object.entries(item.activities) as [string, any][]) {
           const activityID = activityIdMap[actName];
@@ -626,7 +626,7 @@ export function processTable(tableName: string, unzippedDir: string): InsertRow[
       const filePath = path.join(unzippedDir, fileName);
       if (!fs.existsSync(filePath)) continue;
       for (const item of readJsonl(filePath)) {
-        const typeID = item.blueprintTypeID;
+        const typeID = item._key;
         if (!item.activities) continue;
         for (const [actName, actData] of Object.entries(item.activities) as [string, any][]) {
           const activityID = activityIdMap[actName];
@@ -650,7 +650,7 @@ export function processTable(tableName: string, unzippedDir: string): InsertRow[
       const filePath = path.join(unzippedDir, fileName);
       if (!fs.existsSync(filePath)) continue;
       for (const item of readJsonl(filePath)) {
-        const typeID = item.blueprintTypeID;
+        const typeID = item._key;
         if (!item.activities) continue;
         for (const [actName, actData] of Object.entries(item.activities) as [string, any][]) {
           const activityID = activityIdMap[actName];
@@ -1660,7 +1660,7 @@ export const tableMappings: Record<string, { files: string[]; fields: Array<stri
   'skinLicense': {
     files: ['skinLicenses.jsonl'],
     fields: [
-      'licenseTypeID',
+      { name: 'licenseTypeID', transform: (item) => item._key },
       'duration',
       'skinID'
     ]
@@ -1707,7 +1707,7 @@ export const tableMappings: Record<string, { files: string[]; fields: Array<stri
   'industryBlueprints': {
     files: ['blueprints.jsonl'],
     fields: [
-      { name: 'typeID', transform: (item) => item.blueprintTypeID },
+      { name: 'typeID', transform: (item) => item._key },
       'maxProductionLimit'
     ]
   },
